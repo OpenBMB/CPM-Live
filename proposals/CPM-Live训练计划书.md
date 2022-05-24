@@ -26,7 +26,7 @@ CPM-Live的模型架构与主要设置如下：
 - **共享embedding**：CPM-Live输入embedding及输出embedding会共享参数，这点与BERT、GPT、T5一致，与T5-1.1、mT5不一致。我们的实验表明共享输入输出的embedding参数会极大增强训练稳定程度，而不共享embedding参数易于导致训练过程出现NaN。
 - **无bias**：我们的模型中，各类线性变换及layer norm均不设置bias。一方面源于不设置bias的模型训练稳定性会更强，另一方面也是不设置bias的模型在计算速度及显存消耗上要更占优。
 - **动态词表**：对于词表，初始阶段我们将提供大小为50000的中文词表，在后续训练过程中会结合新数据情况进行动态变动。
-- **参数初始化**：embedding ∼ $N(0,  $\frac{1}{\sqrt{d}})$,  线性层参数 ∼ $N(0, 1)$。
+- **参数初始化**：embedding ∼ $N(0, \frac{1}{\sqrt{d}})$,  线性层参数 ∼ $N(0, 1)$。
 - **维度归一化**：Attention层及FFN层中的矩阵运算均要除以$\sqrt{d}$。
 - **Sequence length**：初始512，后续增长为1024，直至2048。
 - **Batch size**: 初始1024，后续增长到2048。
@@ -77,8 +77,8 @@ CPM-Live的模型架构与主要设置如下：
 <tr>
 	<td>4096</td>
 	<td></td>
-	<td>7B</td>
-	<td>10B CPM-Ant</td>
+	<td>:helicopter: 7B</td>
+	<td>:rocket: 10B CPM-Ant</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -86,7 +86,7 @@ CPM-Live的模型架构与主要设置如下：
 <tr>
 	<td>2560</td>
 	<td></td>
-	<td>3B</td>
+	<td>:helicopter: 3B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -94,7 +94,7 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 <tr>
 	<td>2048</td>
-	<td>1B</td>
+	<td>:helicopter: 1B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -103,7 +103,7 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 <tr>
 	<td>1024</td>
-	<td>0.3B</td>
+	<td>:helicopter: 0.3B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -112,7 +112,10 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 </table>
 
-我们将以训练10B参数的CPM-Ant模型为起点，后续训练过程中将陆续增大模型规模和数据量，并提供对更多语言、更多功能的支持。
+- :helicopter: : 发布模型尺寸
+- :rocket: : 目标模型尺寸
+
+我们将以训练10B参数的CPM-Ant模型为起点，提供中英文支持和结构化输入输出功能，后续训练过程中将陆续增大模型规模和数据量，并提供对更多语言、更多功能的支持。
 
 训练工具详见：
 - [BMTrain](https://github.com/OpenBMB/BMTrain)
