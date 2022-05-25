@@ -73,7 +73,7 @@ CPM-Live的模型架构与主要设置如下：
 <tr>
 	<td>4096</td>
 	<td></td>
-	<td>:helicopter: 7B</td>
+	<td>:bug: 7B</td>
 	<td>:ant: 10B CPM-Ant</td>
 	<td></td>
 	<td></td>
@@ -82,7 +82,7 @@ CPM-Live的模型架构与主要设置如下：
 <tr>
 	<td>2560</td>
 	<td></td>
-	<td>:helicopter: 3B</td>
+	<td>:bug: 3B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -90,7 +90,7 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 <tr>
 	<td>2048</td>
-	<td>:helicopter: 1B</td>
+	<td>:bug: 1B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -99,7 +99,7 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 <tr>
 	<td>1024</td>
-	<td>:helicopter: 0.3B</td>
+	<td>:bug: 0.3B</td>
 	<td></td>
 	<td></td>
 	<td></td>
@@ -108,7 +108,7 @@ CPM-Live的模型架构与主要设置如下：
 </tr>
 </table>
 
-- :helicopter: : 发布模型尺寸
+- :bug: : 发布模型尺寸
 - :ant: : 目标模型尺寸
 
 我们将以训练10B参数的CPM-Ant模型为起点，提供中英文支持和结构化输入输出功能，后续训练过程中将陆续增大模型规模和数据量，并提供对更多语言、更多功能的支持。
