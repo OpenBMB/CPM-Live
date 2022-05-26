@@ -225,7 +225,7 @@ CPM-Live系列发布模型适用协议为“[通用模型许可协议-来源说�
 
 ### （二）数据分析
 
-CPM-Ant采用训练数据详情如下表所示：
+CPM-Ant采用1TB原始数据，清洗后得到200GB高质量数据，数据详情如下表所示：
 
 <table align="center">
 <tr>
@@ -233,7 +233,7 @@ CPM-Ant采用训练数据详情如下表所示：
 	<th>占比</th>
 	<th>文档平均长度（字）</th>
 	<th>句子平均长度（字）</th>
-	<th>平均PPL（mGPT）</th>
+	<th>平均PPL（mGPT）*</th>
 </tr>
 <tr>
 	<td>书籍</td>
@@ -291,4 +291,5 @@ CPM-Ant采用训练数据详情如下表所示：
 <td>37.68</td>
 <td>395.26</td>
 </tr>
+<tr><td colspan="5">* 使用<a href="https://huggingface.co/sberbank-ai/mGPT">mGPT</a>计算得到句子平均PPL</td></tr>
 </table>
