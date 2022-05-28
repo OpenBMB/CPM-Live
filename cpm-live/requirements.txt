@@ -1,0 +1,5 @@
+torch>=1.10
+bmtrain
+model-center
+transformers
+jieba
