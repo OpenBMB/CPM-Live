@@ -13,6 +13,7 @@
 </div>
 
 ## What's New
+- 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://live.openbmb.org/home).
 - 2022/05/25 The [training plan](./plans/CPM-Live训练计划书.md) for CPM-Live is now published. Look forward to the training! 
 
 
