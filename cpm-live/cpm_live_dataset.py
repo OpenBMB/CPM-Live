@@ -2,12 +2,6 @@ import torch
 import torch.utils.data as data
 import random
 import numpy as np
-
-import torch
-import numpy as np
-import random
-import torch.nn.functional as F
-
 class CPMLive_Dataset(data.Dataset):
     def __init__(self, ctx, max_length = 1024, prompt_length = 32, tokenizer = None):
         self.ctx = ctx
@@ -38,7 +32,7 @@ class CPMLive_Dataset(data.Dataset):
         len_inp = len(inp)
 
         context_inp = np.full(len_inp, True)
-        position_inp = np.arange((len_inp), dtype = np.float32)
+        position_inp = np.arange((len_inp), dtype = np.int64)
         segment_inp = np.zeros((len_inp), dtype = np.int64)
 
         if task == 1:
@@ -76,11 +70,6 @@ class CPMLive_Dataset(data.Dataset):
 
         if tgt[-2] >= 0 and random.random() < 0.5:
             tgt[-2] = -100
-
-        # for index in range(len(tgt)):
-        #     if tgt[index] != -100:
-        #         assert index >= self.prompt_length
-        #         assert tgt[index] == inp[index+1]
 
         return inp, tgt, len_inp, context_inp, position_inp, segment_inp, task_inp
 
