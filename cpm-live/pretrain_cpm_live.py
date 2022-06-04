@@ -4,7 +4,7 @@ import torch
 import bmtrain as bmt
 import json
 import os
-
+import datetime
 from model_center.dataset import DistributedMMapIndexedDataset
 from model_center.arguments import get_args
 import distutils.version
@@ -76,6 +76,10 @@ def add_mem_time(info, mem_usage, tim_usage):
     tim_usage[info] = time.time()
     return mem_usage, tim_usage
 
+def get_log_name() -> str:
+    now = datetime.datetime.utcnow() + datetime.timedelta(hours=16)
+    return "log.%s.txt" % now.strftime("%Y%m%d")
+
 class BatchPacker:
     def __init__(self, dataset, max_length, batch_size):
         self.last_idx = 0
@@ -120,6 +124,7 @@ class BatchPacker:
                     span[index].append(span[index][-1] + _len)
                     break
             else:
+
                 _ctx = torch.zeros((self.max_length,), dtype=torch.long)
                 _ctx[:_len] = torch.from_numpy(ctx_data)[:_len].long()
                 _tgt = torch.full((self.max_length,), -100, dtype=torch.long)
@@ -169,8 +174,7 @@ class BatchPacker:
 
 def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
 
-    average_time = 0
-    average_time_shift = 0.9
+    average_time = bmt.utils.AverageRecorder()
     loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
 
     start_step = args.start_step
@@ -184,6 +188,10 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
     global_world_size = bmt.world_size()
 
     dataloader = BatchPacker(dataset, args.max_length, args.batch_size)
+    if os.path.exists(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step))):
+        # load dataloader states if exists
+        dataloader_states = pickle.load(open(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step)), "rb"))
+        dataloader.load_state(dataloader_states[bmt.rank()])
 
     for iteration, data in enumerate(dataloader):
 
@@ -223,7 +231,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
 
         # ==========s
         iteration_time = tim_usage['optim'] - tim_usage['init']
-        average_time = average_time * average_time_shift + (1 - average_time_shift) * iteration_time
+        average_time.record(iteration_time)
 
         with torch.no_grad():
             task_num = len(task_ids)
@@ -243,7 +251,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         local_total_rate = torch.Tensor([input_length.float().mean() / args.max_length]).cuda()
         local_total_rate = bmt.sum_loss(local_total_rate).item()
         global_token_pass += (global_world_size * local_total_rate * (args.max_length - args.prompt_length) * args.batch_size) 
-        avg_time = (average_time / (1 - pow(average_time_shift, iteration + 1)))
+        avg_time = average_time.value
         global_throughout += (args.max_length - args.prompt_length) * args.batch_size * local_total_rate / avg_time
 
         train_info = {
@@ -272,7 +280,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
                 global_loss,
                 lr_scheduler.current_lr,
                 int(optimizer.scale),
-                average_time / (1 - pow(average_time_shift, iteration + 1)),
+                avg_time,
                 input_length.float().mean()/args.max_length,
                 (targets>=0).sum(-1).float().mean()/args.max_length,
                 grad_norm
@@ -291,9 +299,9 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
             train_info['model_inspect'] = model_inspect
 
         if bmt.rank() == 0:
-            ff = open("log.txt", "a")
-            ff.write(json.dumps(train_info)+"\n")
-            ff.close()
+
+            with open(get_log_name(), "a") as ff:
+                ff.write(json.dumps(train_info)+"\n")
 
         if bmt.rank() == 0:
             writer.add_scalar("Loss/train", global_loss, iteration)
