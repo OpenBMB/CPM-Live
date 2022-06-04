@@ -2,6 +2,8 @@ import torch
 import torch.utils.data as data
 import random
 import numpy as np
+
+
 class CPMLive_Dataset(data.Dataset):
     def __init__(self, ctx, max_length = 1024, prompt_length = 32, tokenizer = None):
         self.ctx = ctx
@@ -13,7 +15,6 @@ class CPMLive_Dataset(data.Dataset):
         return len(self.ctx)
 
     def __get_item_data(self, ctx, index):
-        # 超长就跳过该条数据
         if ctx.shape[0] > self.max_length - self.prompt_length:
             return None, None, None, None, None, None, None
 

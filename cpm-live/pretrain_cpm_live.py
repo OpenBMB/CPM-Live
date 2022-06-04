@@ -15,6 +15,7 @@ from cpm_live_model import CPMLive
 from cpm_live_tokenizer import CPMLiveTokenizer
 from cpm_live_dataset import CPMLive_Dataset
 
+
 def get_tokenizer(args):
     tokenizer = CPMLiveTokenizer(args.vocab_file)
     return tokenizer
@@ -229,7 +230,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         bmt.optim_step(optimizer, lr_scheduler)
         mem_usage, tim_usage = add_mem_time('optim', mem_usage, tim_usage)
 
-        # ==========s
+        # ==========
         iteration_time = tim_usage['optim'] - tim_usage['init']
         average_time.record(iteration_time)
 
@@ -289,7 +290,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         bmt.print_rank(
             "| " + " | ".join(["{} loss: {:.4f}".format(task_name, task_loss_list[idx]) for task_name, idx in task_ids.items()])
         )
-        if iteration % args.inspect_iters == 0 and bmt.rank() == 0:
+        if iteration % args.inspect_iters == 0:
             model_inspect = bmt.inspect.inspect_model(model, "*")
             bmt.print_rank(
                 bmt.inspect.format_summary(
