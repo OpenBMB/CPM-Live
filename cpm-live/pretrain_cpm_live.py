@@ -34,6 +34,11 @@ def get_optimizer(args, model):
     optimizer = bmt.optim.AdamOffloadOptimizer(model.parameters(), 
                                                weight_decay=args.weight_decay, 
                                                scale=args.loss_scale)
+    if args.load != None:
+        if os.path.exists(os.path.join(args.save, args.save_name + (".rank-%d.opt" % 0))):
+            # optimizer state exists
+            states = torch.load(os.path.join(args.save, args.save_name + (".rank-%d.opt" % bmt.rank())))
+            optimizer.load_state_dict(states)
     return optimizer
 
 def get_learning_rate_scheduler(args, optimizer):
@@ -311,6 +316,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         
         if args.save != None and iteration % args.save_iters == 0:
             bmt.save(model, os.path.join(args.save, args.save_name+("-%d.pt" % iteration)))
+            torch.save(optimizer.state_dict(), os.path.join(args.save, args.save_name + (".rank-%d.opt" % bmt.rank())))
             all_states = bmt.distributed.all_gather(torch.LongTensor([dataloader.state()]).cuda()).view(-1)
             if bmt.rank() == 0:
                 # rank 0 writes the dataloader state
