@@ -14,65 +14,67 @@ class CPMLive_Dataset(data.Dataset):
     def __len__(self):
         return len(self.ctx)
 
-    def __get_item_data(self, ctx, index):
+    def __get_item_data(self, raw_data, index):
+        n_segment = raw_data[0]
+        len_info = n_segment * 2 + 1
+        segment_len = raw_data[1:len_info:2] 
+        segment_type = raw_data[2:len_info:2]
+        ctx = raw_data[len_info:]
+
         if ctx.shape[0] > self.max_length - self.prompt_length:
             return None, None, None, None, None, None, None
-
-        task = random.random()
-        if task <= 0.4:
-            task = 1 # multi span
-        elif task <= 0.8:
-            task = 2 # prefix single span
-        else:
-            task = 3 # prefix single span
-
         len_ctx = min(ctx.shape[0], self.max_length - self.prompt_length)
-        inp = np.arange((self.prompt_length + len_ctx), dtype = np.int64) + \
-             self.prompt_length * task
-        inp[self.prompt_length:] = ctx[:len_ctx]
-        len_inp = len(inp)
 
-        context_inp = np.full(len_inp, True)
-        position_inp = np.arange((len_inp), dtype = np.int64)
-        segment_inp = np.zeros((len_inp), dtype = np.int64)
+        context_inp = np.full(len_ctx, True)
+        position_inp = np.arange(len_ctx, dtype=np.int64)
+        segment_inp = np.full(len_ctx, 0, dtype=np.int64)
+        task_inp = np.full(len_ctx, 0, dtype=np.int64)
+        tgt = np.full(len_ctx, -100, dtype=np.int64)
 
-        if task == 1:
-            num_mask = random.randint(1, len_ctx - 1)
-            mask_idx = np.random.choice(len_ctx - 1, num_mask, replace=False)
-            context_inp[mask_idx + 1 + self.prompt_length] = False
-            segment_inp[self.prompt_length:] = 1
-            task_inp = np.full((len_inp), 0, dtype = np.int64)
-        elif task == 2:
-            num_mask = random.randint(1, len_ctx - 1)
-            if random.random() < 0.5:
-                num_mask = len_ctx - 1
-            context_inp[-num_mask:] = False
-            segment_inp[self.prompt_length:] = 2
-            task_inp = np.full((len_inp), 1, dtype = np.int64)
-        elif task == 3:
-            num_mask = random.randint((len_ctx - 1) // 4, (len_ctx - 1) // 2)
-            context_inp[-num_mask:] = False
-            segment_inp[-num_mask:] = 2
+        # for each segment
+        segment_begin = 0
+        for i in range(n_segment):
+            segment_end = segment_begin + segment_len[i]
+            
+            # random select a task
+            task_p = random.random()
+            if task_p <= 0.5:
+                # multi span
+                task = 0
+            else:
+                # prefix lm
+                task = 1
 
-            num_mask_mlm = random.randint(1, len_ctx - 1 - num_mask)
-            mask_idx = np.random.choice(len_ctx - 1 - num_mask, num_mask_mlm, replace=False)
-            context_inp[mask_idx + 1 + self.prompt_length] = False
-            segment_inp[self.prompt_length : -num_mask] = 1
+            # generate target
+            if task == 0:
+                num_mask = random.randint(1, segment_len[i] - 1)
+                mask_idx = np.random.choice(segment_len[i] - 1, num_mask, replace=False) + segment_begin
+                context_inp[mask_idx + 1] = False
+                task_inp[segment_begin:segment_end] = task
+            elif task == 1:
+                num_mask = random.randint(1, segment_len[i] - 1)
+                context_inp[segment_end - num_mask:segment_end] = False
+                task_inp[segment_begin:segment_end] = task
+            
+            segment_inp[segment_begin:segment_end] = segment_type[i]
 
-            task_inp = np.full((len_inp), 0, dtype = np.int64)
-            task_inp[-num_mask:] = 1
-
-        tgt = np.full((len_inp), -100, dtype = np.int64)
+            segment_begin = segment_end
+            
         tgt[:-1] = np.where(
             context_inp[1:],
             -100,
             inp[1:]
         )
 
-        if tgt[-2] >= 0 and random.random() < 0.5:
-            tgt[-2] = -100
+        # prepend prompt segment
+        context_inp = np.concatenate((np.full(self.prompt_length, True), context_inp))
+        position_inp = np.concatenate((np.arange(self.prompt_length, dtype=np.int64), position_inp + self.prompt_length))
+        segment_inp = np.concatenate((np.full(self.prompt_length, 0, dtype=np.int64), segment_inp))
+        task_inp = np.concatenate((np.full(self.prompt_length, 0, dtype=np.int64), task_inp))
+        tgt = np.concatenate((np.full(self.prompt_length, -100, dtype=np.int64), tgt))
+        inp = np.concatenate((np.arange(self.prompt_length, dtype=np.int64), ctx))
 
-        return inp, tgt, len_inp, context_inp, position_inp, segment_inp, task_inp
+        return inp, tgt, inp.shape[0], context_inp, position_inp, segment_inp, task_inp
 
     def __getitem__(self, index):
         ctx = self.ctx[index]
