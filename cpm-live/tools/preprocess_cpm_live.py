@@ -45,33 +45,61 @@ class Encoder(object):
         contexts = []
         i = 0
         while i < len(doc_ids):
-            piece = doc_ids[i:i+478]
+
+            task = random.random()
+            if task <= 0.4:
+                task = 1
+            elif task <= 1.1:
+                task = 2
+            else:
+                task = 3
+
+            if task == 3:
+                piece = doc_ids[i : i + self.args.max_length - self.args.prompt_length - 4]
+            else:
+                piece = doc_ids[i : i + self.args.max_length - self.args.prompt_length - 2]
+
             if len(piece) < 32:
                 break
-            i += 478
-            
-            context = [Encoder.tokenizer.bos_id] + piece + [Encoder.tokenizer.eos_id]
-            assert len(context) - len(piece) == 2
+
+            i += len(piece)
+
+            if task == 1:
+                context = [1, 1, len(piece) + 2, 1, 0] + [Encoder.tokenizer.bos_id] + piece + [Encoder.tokenizer.eos_id]
+            elif task == 2:
+                context = [2, 1, len(piece) + 2, 2, 1] + [Encoder.tokenizer.bos_id] + piece + [Encoder.tokenizer.eos_id]
+            else:
+                num_mask = random.randint((len(piece) - 1) // 4, (len(piece) - 1) // 2)
+                context = [3, 2, len(piece) - num_mask + 2, 1, 0, num_mask + 2, 2, 1]
+                piece = [Encoder.tokenizer.bos_id] + piece[:-num_mask] + [Encoder.tokenizer.eos_id] + \
+                        [Encoder.tokenizer.bos_id] + piece[-num_mask:] + [Encoder.tokenizer.eos_id]
+                assert context[2] + context[5] == len(piece)
+                context = context + piece
             contexts.append(context)
         return contexts, len(line)
 
+uid = '0'
 
 def get_args():
     parser = argparse.ArgumentParser()
     group = parser.add_argument_group(title='input data')
-    group.add_argument('--input', default="../train_0.txt", type=str, help='Path to input TXT')
+    group.add_argument('--input', default="../raw_data/final_"+uid+".txt", type=str, help='Path to input TXT')
     
     group = parser.add_argument_group(title='tokenizer')
     group.add_argument('--tokenizer_path', default="vocab", type=str, help='Path of tokenizer')
 
     group = parser.add_argument_group(title='output data')
     group.add_argument("--output_path", default="../data_bin/", type=str)
-    group.add_argument('--output_prefix', default="cpm_live_text_0", type=str, help='Path to binary output file without suffix')
+    group.add_argument('--output_prefix', default="cpm_live_text", type=str, help='Path to binary output file without suffix')
     group.add_argument('--dataset_impl', type=str, default='mmap', choices=['lazy', 'cached', 'mmap'])
 
     group = parser.add_argument_group(title='runtime')
-    group.add_argument('--workers', type=int, default=32,
+    group.add_argument('--workers', type=int, default=64,
                        help='Number of worker processes to launch')
+    group.add_argument('--max-length', type=int, default=1024,
+                       help='The max sequence length')
+    group.add_argument('--prompt-length', type=int, default=32,
+                       help='The prompt sequence length')
     group.add_argument('--log_interval', type=int, default=10000,
                        help='Interval between progress updates')
 
@@ -93,8 +121,8 @@ def main():
 
     print(f"Output prefix: {args.output_prefix}")
     
-    context_bin_file = os.path.join(args.output_path, "{}_context_{}.bin".format(args.output_prefix, '0'))
-    context_idx_file = os.path.join(args.output_path,  "{}_context_{}.idx".format(args.output_prefix, '0'))
+    context_bin_file = os.path.join(args.output_path, "{}_context_{}.bin".format(args.output_prefix, uid))
+    context_idx_file = os.path.join(args.output_path,  "{}_context_{}.idx".format(args.output_prefix, uid))
     builder_context = indexed_dataset.make_builder(context_bin_file, impl=args.dataset_impl, dtype=np.uint16)
 
     startup_end = time.time()

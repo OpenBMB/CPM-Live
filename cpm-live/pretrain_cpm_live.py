@@ -61,8 +61,9 @@ def setup_model_and_optimizer(args):
     return tokenizer, model, optimizer, lr_scheduler
 
 def initialize():
+    os.environ["MASTER_PORT"] = (str)((int)(os.environ["MASTER_PORT"])+1123)
     args = get_args()
-    bmt.init_distributed(seed = args.seed, loss_scale_factor = 2, loss_scale_steps = 1024)
+    bmt.init_distributed(seed = args.seed, loss_scale_factor = 2, loss_scale_steps = 512)
     if args.save != None:
         os.makedirs(args.save, exist_ok=True)
     return args
@@ -198,6 +199,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         # load dataloader states if exists
         dataloader_states = pickle.load(open(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step)), "rb"))
         dataloader.load_state(dataloader_states[bmt.rank()])
+    dataloader.load_state(0)
 
     for iteration, data in enumerate(dataloader):
 
