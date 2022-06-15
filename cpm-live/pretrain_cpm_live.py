@@ -1,5 +1,6 @@
 import time
 import pickle
+from typing import Optional
 import torch
 import bmtrain as bmt
 import json
@@ -83,9 +84,46 @@ def add_mem_time(info, mem_usage, tim_usage):
     tim_usage[info] = time.time()
     return mem_usage, tim_usage
 
-def get_log_name() -> str:
-    now = datetime.datetime.utcnow() + datetime.timedelta(hours=16)
+def get_log_time() -> datetime.datetime:
+    return datetime.datetime.utcnow() + datetime.timedelta(hours=16)
+
+def get_log_name(now : Optional[datetime.datetime] = None) -> str:
+    if now is None:
+        now = get_log_time()
     return "log.%s.txt" % now.strftime("%Y%m%d")
+
+def lookup_latest_log():
+    now = get_log_time()
+    
+    # try to find the latest log in the last 15 days
+    for _ in range(15):
+        log_name = get_log_name(now)
+        if os.path.exists(log_name):
+            with open(log_name, "r") as flog:
+                line = flog.readlines()[-1] # get last log
+                return json.loads(line)
+        
+        now -= datetime.timedelta(days=1)   # try the previous day
+    return None
+
+def get_tasks():
+    TASK_FILE_NAME = "tasks.json"
+    if not hasattr(get_tasks, "info"):
+        m_time = os.stat(TASK_FILE_NAME).st_mtime
+        tasks = json.load(open(TASK_FILE_NAME, "r", encoding="utf-8"))
+        get_tasks.info = {
+            "m_time" : m_time,
+            "tasks": tasks
+        }
+    else:
+        m_time = os.stat(TASK_FILE_NAME).st_mtime
+        if m_time != get_tasks.info["m_time"]:
+            tasks = json.load(open(TASK_FILE_NAME, "r", encoding="utf-8"))
+            get_tasks.info = {
+                "m_time" : m_time,
+                "tasks": tasks
+            }
+    return get_tasks.info["tasks"]
 
 class BatchPacker:
     def __init__(self, dataset, max_length, batch_size):
@@ -185,7 +223,6 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
     loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
 
     start_step = args.start_step
-    task_ids = {"mlm": 0, "lm": 1}
 
     if bmt.rank() == 0:
         writer = SummaryWriter(log_dir=args.log_dir)
@@ -193,6 +230,11 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
     global_token_pass = 0.0
     global_throughout = 0.0
     global_world_size = bmt.world_size()
+
+    if bmt.rank() == 0:
+        latest_log = lookup_latest_log()
+        if latest_log is not None:
+            global_token_pass = latest_log["token pass"]
 
     dataloader = BatchPacker(dataset, args.max_length, args.batch_size)
     if os.path.exists(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step))):
@@ -241,6 +283,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         iteration_time = tim_usage['optim'] - tim_usage['init']
         average_time.record(iteration_time)
 
+        task_ids = get_tasks()
         with torch.no_grad():
             task_num = len(task_ids)
             logits_tmp = logits.view(-1, logits.size(-1)).expand(task_num, -1, -1)
