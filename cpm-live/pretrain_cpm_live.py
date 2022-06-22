@@ -241,7 +241,6 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         # load dataloader states if exists
         dataloader_states = pickle.load(open(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step)), "rb"))
         dataloader.load_state(dataloader_states[bmt.rank()])
-    dataloader.load_state(0)
 
     for iteration, data in enumerate(dataloader):
 
