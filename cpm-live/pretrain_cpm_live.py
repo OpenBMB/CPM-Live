@@ -6,7 +6,7 @@ import bmtrain as bmt
 import json
 import os
 import datetime
-from model_center.dataset import DistributedMMapIndexedDataset
+from model_center.dataset import DistributedDataset
 from model_center.arguments import get_args
 import distutils.version
 from torch.utils.tensorboard import SummaryWriter
@@ -127,19 +127,11 @@ def get_tasks():
 
 class BatchPacker:
     def __init__(self, dataset, max_length, batch_size):
-        self.last_idx = 0
         self.dataset = dataset
         self.max_length = max_length
         self.batch_size = batch_size
     
-    def state(self):
-        return self.last_idx
-    
-    def load_state(self, state):
-        self.last_idx = state
-
     def __iter__(self):
-        st = self.last_idx
         ctx = []
         tgt = []
         context = []
@@ -148,9 +140,8 @@ class BatchPacker:
         span = []
         task_info = []
 
-        while True:
-            ctx_data, tgt_data, _len, context_data, position_data, segment_data, task_data = self.dataset[st]
-            st += 1
+        for data in self.dataset:
+            ctx_data, tgt_data, _len, context_data, position_data, segment_data, task_data = data
             if ctx_data is None:
                 continue
             assert _len <= self.max_length
@@ -196,7 +187,6 @@ class BatchPacker:
                     for sindex in span[bindex]:
                         _span[bindex][sindex] = 1
                 
-                self.last_idx = st
                 yield {
                     "ctx": torch.stack(ctx[:self.batch_size]),
                     "tgt": torch.stack(tgt[:self.batch_size]),
@@ -236,11 +226,12 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         if latest_log is not None:
             global_token_pass = latest_log["token pass"]
 
-    dataloader = BatchPacker(dataset, args.max_length, args.batch_size)
-    if os.path.exists(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step))):
-        # load dataloader states if exists
-        dataloader_states = pickle.load(open(os.path.join(args.save, args.save_name+("-%d.data.pkl" % start_step)), "rb"))
-        dataloader.load_state(dataloader_states[bmt.rank()])
+    if os.path.exists(os.path.join(args.save, args.save_name+("-%d.data.pt" % start_step))):
+        # load dataset states if exists
+        dataset_states = torch.load(os.path.join(args.save, args.save_name+("-%d.data.pt" % start_step)))
+        dataset.dataset.load_state_dict(dataset_states)
+
+    dataloader = BatchPacker(dataset, args.max_length, args.batch_size)    
 
     for iteration, data in enumerate(dataloader):
 
@@ -361,10 +352,10 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         if args.save != None and iteration % args.save_iters == 0:
             bmt.save(model, os.path.join(args.save, args.save_name+("-%d.pt" % iteration)))
             torch.save(optimizer.state_dict(), os.path.join(args.save, args.save_name + (".rank-%d.opt" % bmt.rank())))
-            all_states = bmt.distributed.all_gather(torch.LongTensor([dataloader.state()]).cuda()).view(-1)
+            all_states = dataset.dataset.state_dict()
             if bmt.rank() == 0:
                 # rank 0 writes the dataloader state
-                pickle.dump(all_states.tolist(), open(os.path.join(args.save, args.save_name+("-%d.data.pkl" % iteration)), "wb"))
+                torch.save(all_states, os.path.join(args.save, args.save_name + ("-%d.data.pt" % iteration)))
             del all_states
 
     bmt.save(model, os.path.join(args.save, args.save_name+".pt"))
@@ -374,7 +365,7 @@ def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
     dataset = CPMLive_Dataset(
-        DistributedMMapIndexedDataset("../data_bin/", "cpm_live_text_context", bmt.rank(), bmt.world_size()),
+        DistributedDataset("../data_bin_new", bmt.rank(), bmt.world_size()),
         max_length = args.max_length - args.prompt_length, 
         prompt_length = args.prompt_length,
         tokenizer = tokenizer
