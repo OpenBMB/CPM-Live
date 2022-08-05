@@ -14,7 +14,11 @@ class CPMLive_Dataset(data.Dataset):
     def __len__(self):
         return len(self.ctx)
 
-    def __get_item_data(self, raw_data, index):
+    @property
+    def dataset(self):
+        return self.ctx
+
+    def __get_item_data(self, raw_data):
 
         global_task = raw_data[0]
         n_segment = raw_data[1]
@@ -67,8 +71,9 @@ class CPMLive_Dataset(data.Dataset):
         inp = np.concatenate((np.arange(self.prompt_length, dtype=np.int64) + self.prompt_length * global_task, ctx))
         return inp, tgt, inp.shape[0], context_inp, position_inp, segment_inp, task_inp
 
-    def __getitem__(self, index):
-        ctx = self.ctx[index]
-        th_ctx, th_tgt, len_ctx, context_ctx, position_ctx, segment_ctx, task_ctx = \
-                self.__get_item_data(ctx, index)
-        return th_ctx, th_tgt, len_ctx, context_ctx, position_ctx, segment_ctx, task_ctx
+    def __iter__(self):
+        while True:
+            ctx = self.ctx.read()
+            th_ctx, th_tgt, len_ctx, context_ctx, position_ctx, segment_ctx, task_ctx = \
+                self.__get_item_data(ctx)
+            yield th_ctx, th_tgt, len_ctx, context_ctx, position_ctx, segment_ctx, task_ctx
