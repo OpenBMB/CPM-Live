@@ -57,7 +57,8 @@ class CPMLiveConfig(Config):
                         absolute_inner_segment = True,
                         cls_head = None,
                         post_layer_norm=False,
-                        use_cache = False
+                        use_cache = False,
+                        mask_modules = None,
         ):
 
         super().__init__()
@@ -104,3 +105,4 @@ class CPMLiveConfig(Config):
         self.attn_scale = attn_scale
         self.post_layer_norm = post_layer_norm
         self.use_cache = use_cache
+        self.mask_modules = mask_modules
