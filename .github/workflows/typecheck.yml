@@ -22,5 +22,6 @@ jobs:
     - name: Run pyright
       run: |
         cd cpm-live
+        pip3 install torch>=1.9
         pip3 install -r requirements.txt
         pyright
