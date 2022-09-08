@@ -150,10 +150,8 @@ class CPMAnt(bmt.DistributedModule):
                 context[:, :, None].logical_not() & directional_mask_2d.view(1, seqlen, seqlen)
             )
             attention_mask = attention_mask & (span[:, None, :] == span[:, :, None])
-            # use left padding
             mask_1d = (
-                torch.tensor(list(range(seqlen))[::-1], device=device)[None, :].repeat(batch, 1)
-                < length[:, None]
+                torch.arange(seqlen, device=device)[None, :].repeat(batch, 1) < length[:, None]
             )
             attention_mask = (
                 mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask

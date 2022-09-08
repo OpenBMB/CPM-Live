@@ -17,7 +17,7 @@ class LayerNorm(bmt.DistributedModule):
         self,
         dim_norm: int,
         dtype: torch.dtype = torch.half,
-        eps: float = 1e-5,
+        eps: float = 1e-6,
         init_var: float = 1.0,
     ):
 

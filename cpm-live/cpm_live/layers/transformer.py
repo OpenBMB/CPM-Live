@@ -102,10 +102,8 @@ class Encoder(bmt.DistributedModule):
             :obj:`torch.Tensor` of shape ``(batch, seq_enc, dim_model)``: The encoder output.
 
         """  # noqa: E501
-        if not self.use_cache:
-            hidden_states = self.layers(
-                hidden_states, attention_mask, position_bias, None, None, None
-            )
+        if not use_cache:
+            hidden_states = self.layers(hidden_states, attention_mask, position_bias)
             hidden_states = self.output_layernorm(hidden_states)
             return hidden_states
         else:
@@ -116,9 +114,6 @@ class Encoder(bmt.DistributedModule):
                         hidden_states,
                         attention_mask,
                         position_bias,
-                        None,
-                        None,
-                        None,
                         past_key_value=past_key_values[i] if past_key_values else None,
                         use_cache=use_cache,
                     )
