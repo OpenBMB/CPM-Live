@@ -33,7 +33,7 @@ class Encoder(bmt.DistributedModule):
         dtype (optional): Defaults to torch.half.
         eps (float, optional): eps used in :py:class:`model_center.layer.LayerNorm`. Defaults to 1e-6.
         dropout_p (float, optional): Defaults to 0.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class Encoder(bmt.DistributedModule):
         Return:
             :obj:`torch.Tensor` of shape ``(batch, seq_enc, dim_model)``: The encoder output.
 
-        """
+        """  # noqa: E501
         if not self.use_cache:
             hidden_states = self.layers(
                 hidden_states, attention_mask, position_bias, None, None, None

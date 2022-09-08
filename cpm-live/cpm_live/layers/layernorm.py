@@ -33,6 +33,6 @@ class LayerNorm(bmt.DistributedModule):
             x (:obj:`torch.Tensor` of shape ``(batch_size, seq_len, dim_norm)``): Input tensor that need to be normalized.
         Return:
             :obj:`torch.Tensor` of shape ``(batch_size, seq_len, dim_norm)``: The layernorm output.
-        """
+        """  # noqa: E501
         assert x.size(-1) == self.dim_norm
         return rms_layernorm(x, self.weight, self.eps)

@@ -1,4 +1,4 @@
-name: "type check"
+name: "lint"
 on:
   pull_request:
     branches:
@@ -7,7 +7,7 @@ on:
     branches:
       - "**"
 jobs:
-  pyright:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -15,10 +15,10 @@ jobs:
         with:
           python-version: 3.7.4
           architecture: x64
-      - name: Install pyright
-        run: pip install pyright
-      - name: Run pyright
+      - name: Install flake8
+        run: pip install flake8
+      - name: Run flake8
         run: |
           cd cpm-live
-          pyright
+          flake8
 

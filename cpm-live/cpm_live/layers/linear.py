@@ -47,7 +47,7 @@ class Linear(bmt.DistributedModule):
             x (:obj:`torch.Tensor` of shape ``(batch, seq_len, dim_in)``): The input of linear layer
         Returns:
             :obj:`torch.Tensor` of shape ``(batch, seq_len, dim_out)``: The output of the linear transform y.
-        """
+        """  # noqa: E501
         if self.scale_before:
             x = x / math.sqrt(self.dim_in)
             x = F.linear(x, self.weight)

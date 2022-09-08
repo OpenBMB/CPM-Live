@@ -53,7 +53,7 @@ class DenseGatedACT(bmt.DistributedModule):
         Return:
             out (:obj:`torch.Tensor` of shape ``(batch, seq_len, dim_ff)``)
 
-        """
+        """  # noqa: E501
         gate_score = self.act(self.w_0(x))
         x = self.w_1(x)
 
@@ -74,7 +74,7 @@ class FeedForward(bmt.DistributedModule):
         bias (bool, optional): whether to use bias term in fully-connected layers used in feed-forward module. Defaults to False.
         activate_fn (str, optional): Defaults to `gated_gelu`.
         dropout_p (int, optional): Defaults to 0.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -111,7 +111,7 @@ class FeedForward(bmt.DistributedModule):
 
         Return:
             :obj:`torch.Tensor` of shape ``(batch, seq_len, dim_out)``: The output of feed-forward module.
-        """
+        """  # noqa: E501
         x = self.w_in(x)
 
         if self.dropout is not None:

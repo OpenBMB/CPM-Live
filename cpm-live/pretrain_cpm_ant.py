@@ -7,7 +7,7 @@ import os
 import datetime
 from cpm_live.dataset import DistributedDataset
 from cpm_live import get_args
-import distutils.version
+import distutils.version  # noqa: F401
 from torch.utils.tensorboard import SummaryWriter
 
 from cpm_live.models import CPMAnt, CPMAntConfig
@@ -23,7 +23,7 @@ def get_tokenizer(args):
 def get_model(args):
     config = CPMAntConfig.from_json_file(args.model_config)
     model = CPMAnt(config)
-    if args.load != None:
+    if args.load is not None:
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
@@ -35,7 +35,7 @@ def get_optimizer(args, model):
     optimizer = bmt.optim.AdamOffloadOptimizer(
         model.parameters(), weight_decay=args.weight_decay, scale=args.loss_scale
     )
-    if args.load != None:
+    if args.load is not None:
         if os.path.exists(os.path.join(args.save, args.save_name + (".rank-%d.opt" % 0))):
             # optimizer state exists
             states = torch.load(
@@ -71,7 +71,7 @@ def setup_model_and_optimizer(args):
 def initialize():
     args = get_args()
     bmt.init_distributed(seed=args.seed, loss_scale_factor=2, loss_scale_steps=512)
-    if args.save != None:
+    if args.save is not None:
         os.makedirs(args.save, exist_ok=True)
     return args
 
@@ -366,7 +366,10 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         train_info["task_loss"] = task_loss
 
         bmt.print_rank(
-            "| Iter: {:6d} | loss: {:.4f} | lr: {:.4e}, scale: {:10.4f} | time: {:.4f} | token/max: {:.4f} | mask/max: {:.4f} | grad_norm: {:.4f}".format(
+            (
+                "| Iter: {:6d} | loss: {:.4f} | lr: {:.4e}, scale: {:10.4f} | time: {:.4f} |"
+                + " token/max: {:.4f} | mask/max: {:.4f} | grad_norm: {:.4f}"
+            ).format(
                 iteration,
                 global_loss,
                 lr_scheduler.current_lr,
@@ -401,7 +404,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
             for i in task_ids.keys():
                 writer.add_scalar("Loss/train/{}".format(i), task_loss_list[task_ids[i]], iteration)
 
-        if args.save != None and iteration % args.save_iters == 0:
+        if args.save is not None and iteration % args.save_iters == 0:
             bmt.save(model, os.path.join(args.save, args.save_name + ("-%d.pt" % iteration)))
             torch.save(
                 optimizer.state_dict(),

@@ -31,7 +31,7 @@ class SelfAttentionBlock(bmt.DistributedModule):
         dtype (optional): Defaults to torch.half.
         eps (float, optional): eps used in :py:class:`model_center.layer.LayerNorm`. Defaults to 1e-5.
         dropout_p (float, optional): Defaults to 0.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -81,7 +81,7 @@ class SelfAttentionBlock(bmt.DistributedModule):
         Return:
             :obj:`torch.Tensor` of shape ``(batch, seq_self, dim_model)``: The output of attention block.
 
-        """
+        """  # noqa: E501
         x = self.layernorm_before_attention(hidden_states)
         x = self.self_attention(x, x, attention_mask, position_bias, use_cache, past_key_value)
         if use_cache:
@@ -108,7 +108,7 @@ class FFNBlock(torch.nn.Module):
         dtype (optional): Defaults to torch.half.
         eps (float, optional): eps used in :py:class:`model_center.layer.LayerNorm`. Defaults to 1e-5.
         dropout_p (float, optional): Defaults to 0.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -149,7 +149,7 @@ class FFNBlock(torch.nn.Module):
         Return:
             :obj:`torch.Tensor` of shape ``(batch, seq_self, dim_model)``: The output of feed-forward block
 
-        """
+        """  # noqa: E501
         x = self.layernorm_before_ffn(hidden_states)
         x = self.ffn(x)
         if self.dropout is not None:
@@ -169,7 +169,7 @@ class TransformerBlock(torch.nn.Module):
         dtype (optional): Defaults to torch.half.
         eps (float, optional): eps used in :py:class:`model_center.layer.LayerNorm`. Defaults to 1e-5.
         dropout_p (float, optional): Defaults to 0.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -223,7 +223,7 @@ class TransformerBlock(torch.nn.Module):
         Return:
             :obj:`torch.Tensor` of shape ``(batch, seq_self, dim_model)``: The output of transformer block.
 
-        """
+        """  # noqa: E501
         # (batch, dim_model, seq_self)
         current_key_value = None
         if not self.mask_att:

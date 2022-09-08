@@ -15,7 +15,7 @@
 from typing import List, Optional, Tuple
 import torch
 from ..utils import Config
-from ..layers import Encoder, Embedding, Linear, SegmentPositionEmbedding, LayerNorm
+from ..layers import Encoder, Embedding, SegmentPositionEmbedding
 import bmtrain as bmt
 
 

@@ -93,7 +93,7 @@ class DistributedDataset:
         >>> dataset = DistributedDataset("/path/to/dataset")
         >>> for i in range(10):
         >>>     dataset.read()
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -519,5 +519,5 @@ def build_dataset(path: str, dbname: str, block_size: int = _DEFAULT_BLOCK_SIZE)
         >>> with build_dataset("/path/to/dataset", "data_part_1") as writer:
         >>>     for i in range(10):
         >>>         writer.write( { "anything you want" } )
-    """
+    """  # noqa: E501
     return DatasetBuilder(path, dbname, block_size)

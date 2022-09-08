@@ -66,7 +66,7 @@ class Attention(bmt.DistributedModule):
             position_bias(:obj:`torch.Tensor` of shape ``(num_heads, len_q, len_k)`` or ``(1, num_heads, len_k, len_q)``): Provide positional information about tensor `key_value` and `query`.
         Return:
             out (:obj:`torch.Tensor` of shape ``(batch, len_q, dim_model)``): The attention output.
-        """
+        """  # noqa: E501
 
         batch_size = hidden_q.size(0)
         len_q = hidden_q.size(1)

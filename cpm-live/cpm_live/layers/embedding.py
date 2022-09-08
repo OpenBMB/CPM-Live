@@ -45,7 +45,7 @@ class Embedding(bmt.DistributedModule):
             ids (:obj:`torch.Tensor` of shape ``(batch_size, seq_len)``): Indices of input sequence tokens.
         Return:
             :obj:`torch.Tensor` of shape ``(batch_size, seq_len, embedding_size)``: The embedding output.
-        """
+        """  # noqa: E501
 
         embeds = F.embedding(ids, self.weight) / math.sqrt(self.dim_model)
         return embeds
@@ -57,6 +57,6 @@ class Embedding(bmt.DistributedModule):
             x (:obj:`torch.Tensor` of shape ``(batch, seq_len, dim_model)``): Input of projection
         Returns:
             :obj:`torch.Tensor` of shape ``(batch, seq_len, vocab_output_size)``: The projection output.
-        """
+        """  # noqa: E501
         logits = F.linear(x / math.sqrt(self.dim_model), self.weight)
         return logits
