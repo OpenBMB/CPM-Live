@@ -1,0 +1,27 @@
+name: "type check"
+on:
+  pull_request:
+    branches:
+      - "**"
+  push:
+    branches:
+      - "**"
+jobs:
+  pyright:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install pyright
+      run: pip install pyright
+    - name: Run pyright
+      run: |
+        cd cpm-live
+        pip3 install torch>=1.9
+        pip3 install -r requirements.txt
+        pyright
