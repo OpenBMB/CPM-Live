@@ -92,7 +92,7 @@ class CPMAnt(bmt.DistributedModule):
         )
 
         self.input_embedding = Embedding(
-            vocab_size=config.vocab_size,
+            vocab_size=config.vocab_size + config.prompt_length * config.prompt_types,
             embedding_size=config.dim_model,
             dtype=config.dtype,
             init_std=0.02,
