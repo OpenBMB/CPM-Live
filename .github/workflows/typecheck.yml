@@ -22,4 +22,5 @@ jobs:
     - name: Run pyright
       run: |
         cd cpm-live
+        pip3 install -r requirements.txt
         pyright
