@@ -60,6 +60,12 @@ def add_training_args(parser: argparse.ArgumentParser):
         default=1000,
         help="number of iterations between saves",
     )
+    group.add_argument(
+        "--log-dir",
+        type=str,
+        default="logs",
+        help="tensorboard log directory",
+    )
     group.add_argument("--inspect-iters", type=int, default=1000, help="number of inspecting")
     group.add_argument("--batch-size", type=int, default=32, help="Data Loader batch size")
     group.add_argument("--clip-grad", type=float, default=1.0, help="gradient clipping")
