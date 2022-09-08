@@ -40,7 +40,7 @@ class Attention(bmt.DistributedModule):
         self.project_k = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
         self.project_v = Linear(self.dim_model, self.num_heads * self.dim_head, dtype=dtype)
 
-        self.attn_out = Linear(self.num_heads * self.dim_head, self.dim_model, dtype=dtype)
+        self.attention_out = Linear(self.num_heads * self.dim_head, self.dim_model, dtype=dtype)
 
         self.softmax = torch.nn.Softmax(dim=-1)
 
@@ -111,7 +111,7 @@ class Attention(bmt.DistributedModule):
         score = score.view(batch_size, self.num_heads, len_q, self.dim_head).permute(0, 2, 1, 3)
         score = score.contiguous().view(batch_size, len_q, self.num_heads * self.dim_head)
 
-        score = self.attn_out(score)
+        score = self.attention_out(score)
         if use_cache:
             return score, (h_k, h_v)
         else:
