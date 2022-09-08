@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import torch
-from model_center.model.config import Config
+from .model_center.model.config import Config
 
 
 class CPMLiveConfig(Config):
@@ -58,7 +58,7 @@ class CPMLiveConfig(Config):
                         cls_head = None,
                         post_layer_norm=False,
                         use_cache = False,
-                        mask_modules = None,
+                        mask_modules = None
         ):
 
         super().__init__()

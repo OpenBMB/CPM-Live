@@ -48,13 +48,18 @@ class CPMLive_Dataset(data.Dataset):
                 num_mask = random.randint(1, segment_len[i] - 1)
                 mask_idx = np.random.choice(segment_len[i] - 1, num_mask, replace=False) + segment_begin
                 context_inp[mask_idx + 1] = False
-                task_inp[segment_begin:segment_end] = task
                 assert segment_type[i] == 1
             elif task == 1:
                 num_mask = random.randint(1, segment_len[i] - 1)
                 context_inp[segment_end-num_mask:segment_end] = False
-                task_inp[segment_begin:segment_end] = task
                 assert segment_type[i] == 2
+            elif task == 3:
+                if segment_type[i] == 2:
+                    context_inp[1:] = False
+            elif task == 4:
+                if segment_type[i] == 3:
+                    context_inp[1:] = False
+            task_inp[segment_begin:segment_end] = task
             segment_inp[segment_begin:segment_end] = segment_type[i]
             tgt[segment_begin : segment_end - 1] = np.where(
                 context_inp[segment_begin + 1 : segment_end],
