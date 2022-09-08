@@ -108,7 +108,6 @@ class CPMAnt(bmt.DistributedModule):
         )
 
         self.prompt_length = config.prompt_length
-        self.prompt_types = config.prompt_types
 
     def forward(
         self,
