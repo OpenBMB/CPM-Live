@@ -19,11 +19,12 @@ import numpy as np
 
 
 class CPMAntPretrainDataset(data.Dataset):
-    def __init__(self, ctx, max_length=1024, prompt_length=32, tokenizer=None):
+    def __init__(self, ctx, max_length=1024, prompt_length=32, tokenizer=None, text_vocab_size=30720):
         self.ctx = ctx
         self.max_length = max_length + prompt_length
         self.prompt_length = prompt_length
         self.tokenizer = tokenizer
+        self.text_vocab_size=text_vocab_size
 
     def __len__(self):
         return len(self.ctx)
@@ -96,7 +97,7 @@ class CPMAntPretrainDataset(data.Dataset):
         tgt = np.concatenate((np.full(self.prompt_length, -100, dtype=np.int64), tgt))
         inp = np.concatenate(
             (
-                np.arange(self.prompt_length, dtype=np.int64) + self.prompt_length * global_task,
+                np.arange(self.prompt_length, dtype=np.int64) + self.prompt_length * global_task + self.text_vocab_size,
                 ctx,
             )
         )
