@@ -31,7 +31,8 @@ class CPMLive(torch.nn.Module):
             ffn_activate_fn = config.ffn_activate_fn,
             length_scale = config.length_scale,
             attn_scale = config.attn_scale,
-            dropout_p = config.dropout_p,)
+            dropout_p = config.dropout_p,
+            mask_modules = config.mask_modules,)
 
         self.prompt_embedding = Embedding(
             vocab_size = config.prompt_types * config.prompt_length, 
