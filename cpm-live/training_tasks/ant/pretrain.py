@@ -96,7 +96,8 @@ class CPMAntPretrainDataset(data.Dataset):
         tgt = np.concatenate((np.full(self.prompt_length, -100, dtype=np.int64), tgt))
         inp = np.concatenate(
             (
-                np.arange(self.prompt_length, dtype=np.int64) + self.prompt_length * global_task,
+                np.arange(self.prompt_length, dtype=np.int64) +
+                self.prompt_length * global_task + self.tokenizer.vocab_size,
                 ctx,
             )
         )
