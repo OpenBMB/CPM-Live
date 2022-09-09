@@ -117,8 +117,49 @@ class CPMAnt(bmt.DistributedModule):
         position: torch.Tensor,  # (batch, seqlen)
         segment: torch.Tensor,  # (batch, seqlen)
         span: torch.Tensor,  # (batch, seqlen)
-        past_key_values=None,  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
-        use_cache=False,
+    ):
+
+        batch = input.size(0)
+        seqlen = input.size(1)
+        input_prompt = input[:, : self.prompt_length].contiguous()
+        input_ids = input[:, self.prompt_length :].contiguous()
+
+        prompt_states = self.prompt_embedding(input_prompt)
+        hidden_states = self.input_embedding(input_ids)
+        segment_states = self.segment_embedding(segment)
+        hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
+
+        with torch.no_grad():
+            device = input.device
+            directional_mask_2d = torch.arange(seqlen, device=device) <= torch.arange(
+                seqlen, device=device
+            ).view(-1, 1)
+            attention_mask = context[:, None, :] | (
+                context[:, :, None].logical_not() & directional_mask_2d.view(1, seqlen, seqlen)
+            )
+            attention_mask = attention_mask & (span[:, None, :] == span[:, :, None])
+            mask_1d = (
+                torch.arange(seqlen, device=device)[None, :].repeat(batch, 1) < length[:, None]
+            )
+            attention_mask = (
+                mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask
+            )
+
+        position_bias = self.position_bias(position, position, segment, segment)
+        hidden_states = self.encoder(hidden_states, attention_mask, position_bias)
+
+        logits = self.input_embedding.projection(hidden_states)
+        return logits, hidden_states
+
+    def inference(
+        self,
+        input: torch.Tensor,  # (batch, seqlen)
+        length: torch.Tensor,  # (batch)
+        context: torch.Tensor,  # (batch, seqlen)
+        position: torch.Tensor,  # (batch, seqlen)
+        segment: torch.Tensor,  # (batch, seqlen)
+        span: torch.Tensor,  # (batch, seqlen)
+        past_key_values=None  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
     ):
 
         batch = input.size(0)
@@ -150,8 +191,10 @@ class CPMAnt(bmt.DistributedModule):
                 context[:, :, None].logical_not() & directional_mask_2d.view(1, seqlen, seqlen)
             )
             attention_mask = attention_mask & (span[:, None, :] == span[:, :, None])
+            # mask for left paddding
             mask_1d = (
-                torch.arange(seqlen, device=device)[None, :].repeat(batch, 1) < length[:, None]
+                torch.tensor(list(range(seqlen))[::-1], device=device)[None, :].repeat(batch, 1)
+                < length[:, None]
             )
             attention_mask = (
                 mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask
@@ -159,19 +202,12 @@ class CPMAnt(bmt.DistributedModule):
 
         position_bias = self.position_bias(position, position, segment, segment)
 
-        if past_length > 0:
-            attention_mask = attention_mask[:, past_length:, :]
-            position_bias = position_bias[:, :, past_length:, :]
+        attention_mask = attention_mask[:, past_length:, :]
+        position_bias = position_bias[:, :, past_length:, :]
 
-        if use_cache:
-            hidden_states, present_key_values = self.encoder(
-                hidden_states, attention_mask, position_bias, use_cache, past_key_values
-            )
-            logits = self.input_embedding.projection(hidden_states)
-            return logits, hidden_states, present_key_values
-        else:
-            hidden_states = self.encoder(
-                hidden_states, attention_mask, position_bias, use_cache, past_key_values
-            )
-            logits = self.input_embedding.projection(hidden_states)
-            return logits, hidden_states
+        hidden_states, present_key_values = self.encoder(
+            hidden_states, attention_mask, position_bias, True, past_key_values
+        )
+        logits = self.input_embedding.projection(hidden_states)
+        return logits, hidden_states, present_key_values
+
