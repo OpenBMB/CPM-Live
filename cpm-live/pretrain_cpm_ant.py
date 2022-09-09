@@ -425,7 +425,6 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
 def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-
     dataset = CPMAntPretrainDataset(
         DistributedDataset("../data_bin_new", bmt.rank(), bmt.world_size()),
         max_length=args.max_length - args.prompt_length,
