@@ -14,16 +14,19 @@
 # limitations under the License.
 
 import os
+import struct
 from typing import List
 from .distributed_dataset import (
     SimpleDataset,
     build_dataset,
+    _read_info_list,
+    _write_info_list,
     _random_string,
     _DEFAULT_BLOCK_SIZE,
     FileInfo,
 )
+from .serializer import RawSerializer
 import random
-import pickle
 import shutil
 
 try:
@@ -60,7 +63,7 @@ def shuffle_dataset(
     if progress_bar and not support_tqdm:
         raise RuntimeError("Requires `tqdm` to enable progress bar.")
 
-    ds = SimpleDataset(path_src, block_size=block_size)
+    ds = SimpleDataset(path_src, block_size=block_size, serializer=RawSerializer())
     num_buckets = (ds.nbytes + bucket_size - 1) // bucket_size
 
     tmp_files = [os.path.join(path_src, ".tmp.%s" % _random_string()) for _ in range(num_buckets)]
@@ -74,7 +77,10 @@ def shuffle_dataset(
                 iterator = tqdm(ds, desc="Shuffle step 1/2")
             for data in iterator:
                 bucket_id = int(random.random() * num_buckets)
-                pickle.dump(data, f_tmp[bucket_id])  # write into a random bucket
+                len_data = len(data)
+                f_tmp[bucket_id].write(
+                    struct.pack("I", len_data) + data
+                )
         finally:
             # close all files
             for fp in f_tmp:
@@ -83,7 +89,7 @@ def shuffle_dataset(
         f_tmp = []
 
         # Step 2: shuffle inside bucket
-        with build_dataset(path_tgt, "%s.shuffle" % _random_string()) as writer:
+        with build_dataset(path_tgt, "%s.shuffle" % _random_string(), block_size=block_size, serializer=RawSerializer()) as writer:
             iterator = tmp_files
             if progress_bar:
                 iterator = tqdm(tmp_files, desc="Shuffle step 2/2")
@@ -93,7 +99,8 @@ def shuffle_dataset(
                 data_in_bucket = []
                 while True:
                     try:
-                        data_in_bucket.append(pickle.load(fp))
+                        len_data = struct.unpack("I", fp.read(4))[0]
+                        data_in_bucket.append(fp.read(len_data))
                     except EOFError:
                         break
                 random.shuffle(data_in_bucket)
@@ -125,12 +132,11 @@ def compact_dataset(path: str):
 
     info: List[FileInfo] = []
     if os.path.exists(meta_path):
-        with open(meta_path, "rb") as f:
-            info = pickle.load(f)
+        info = _read_info_list(meta_path)
     else:
         raise ValueError("Dataset not exists")
 
-    nw_info = []
+    nw_info : List[FileInfo] = []
     curr_block = 0
     for v in info:
         if not os.path.exists(v.file_name):
@@ -150,10 +156,7 @@ def compact_dataset(path: str):
             )
             curr_block += num_file_block
 
-    random_fname = os.path.join(path, ".meta.bin.%s" % _random_string())
-    with open(random_fname, "wb") as f:
-        pickle.dump(nw_info, f)
-    os.rename(random_fname, meta_path)
+    _write_info_list(meta_path, nw_info)
 
 
 def mask_dataset(path: str, dbname: str, mask: bool = True):
@@ -173,20 +176,14 @@ def mask_dataset(path: str, dbname: str, mask: bool = True):
 
     info: List[FileInfo] = []
     if os.path.exists(meta_path):
-        with open(meta_path, "rb") as f:
-            info = pickle.load(f)
+        info = _read_info_list(meta_path)
     else:
         raise ValueError("Dataset not exists")
 
     for v in info:
         if v.file_name == dbname:
             v.mask = mask
-
-    random_fname = os.path.join(path, ".meta.bin.%s" % _random_string())
-    with open(random_fname, "wb") as f:
-        pickle.dump(info, f)
-    os.rename(random_fname, meta_path)
-
+    _write_info_list(meta_path, info)
 
 def merge_dataset(dst: str, src: str):
 
@@ -195,15 +192,13 @@ def merge_dataset(dst: str, src: str):
 
     info_src: List[FileInfo] = []
     if os.path.exists(meta_path_src):
-        with open(meta_path_src, "rb") as f:
-            info_src = pickle.load(f)
+        info_src = _read_info_list(meta_path_src)
     else:
         raise ValueError("Dataset not exists")
 
     info_dst: List[FileInfo] = []
     if os.path.exists(meta_path_dst):
-        with open(meta_path_dst, "rb") as f:
-            info_dst = pickle.load(f)
+        info_dst = _read_info_list(meta_path_dst)
     else:
         raise ValueError("Dataset not exists")
 
@@ -248,7 +243,4 @@ def merge_dataset(dst: str, src: str):
         )
         curr_block += num_file_block
 
-    random_fname = os.path.join(dst, ".meta.bin.%s" % _random_string())
-    with open(random_fname, "wb") as f:
-        pickle.dump(nw_info, f)
-    os.rename(random_fname, meta_path_dst)
+    _write_info_list(meta_path_dst, nw_info)
