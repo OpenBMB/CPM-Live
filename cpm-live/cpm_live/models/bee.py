@@ -101,10 +101,6 @@ class CPMBee(bmt.DistributedModule):
         segment_rel: torch.Tensor,  # (batch, num_segment_bucket) long
         span: torch.Tensor,  # (batch, seqlen) long
     ):
-        """
-
-        """
-
         batch = input.size(0)
         seqlen = input.size(1)
 
