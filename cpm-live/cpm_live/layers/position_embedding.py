@@ -21,12 +21,12 @@ import torch.nn.functional as F
 class SegmentPositionEmbedding(bmt.DistributedModule):
     def __init__(
         self,
-        num_heads,
-        num_segments=1,
-        num_buckets=32,
-        max_distance=128,
-        bidirectional=False,
-        dtype=torch.half,
+        num_heads : int,
+        num_segments : int=1,
+        num_buckets : int=32,
+        max_distance : int=128,
+        bidirectional : bool=False,
+        dtype : torch.dtype=torch.half,
         init_mean: float = 0.0,
         init_std: float = 1,
     ):
@@ -110,6 +110,91 @@ class SegmentPositionEmbedding(bmt.DistributedModule):
             relative_position = torch.abs(relative_position)
         else:
             relative_position = -torch.min(relative_position, torch.zeros_like(relative_position))
+        max_exact = num_buckets // 2
+        is_small = relative_position < max_exact
+        relative_postion_if_large = max_exact + (
+            torch.log(relative_position.float() / max_exact)
+            / math.log(max_distance / max_exact)
+            * (num_buckets - max_exact)
+        ).to(torch.int32)
+        relative_postion_if_large = torch.min(
+            relative_postion_if_large,
+            torch.full_like(relative_postion_if_large, num_buckets - 1),
+        )
+        relative_buckets += torch.where(
+            is_small, relative_position.to(torch.int32), relative_postion_if_large
+        )
+        return relative_buckets
+
+class BucketPositionBias(bmt.DistributedModule):
+    def __init__(
+            self,
+            num_heads : int,
+            num_buckets : int=32,
+            num_segment_bucket : int = 32,
+            max_distance : int=128,
+            dtype : torch.dtype=torch.half,
+            init_mean: float = 0.0,
+            init_std: float = 1,
+        ) -> None:
+        super().__init__()
+
+        self.num_heads = num_heads
+        self.num_buckets = num_buckets
+        self.num_segment_bucket = num_segment_bucket
+        self.max_distance = max_distance
+
+        self.relative_attention_bias = bmt.DistributedParameter(
+            torch.empty(num_buckets + num_segment_bucket, num_heads, dtype=dtype),
+            init_method=bmt.ParameterInitializer(
+                torch.nn.init.normal_, mean=init_mean, std=init_std
+            ),
+        )
+    
+    def forward(
+        self,
+        query_pos: torch.Tensor,    # (batch, len_q)
+        key_pos: torch.Tensor,      # (batch, len_k)
+        rel_buckets : torch.Tensor  # (batch, len_q, len_k)
+    ):
+        with torch.no_grad():
+
+            batch = key_pos.size(0)
+            keylen = key_pos.size(1)
+            querylen = query_pos.size(1)
+
+            assert key_pos.size(0) == query_pos.size(0)
+            assert rel_buckets.size(0) == batch and rel_buckets.size(1) == querylen and rel_buckets.size(2) == keylen
+
+            relative_position_bucket = rel_buckets - 1 + self.num_buckets  # 与相对位置编码区间不重叠
+
+            # b*q*k
+            inner_segment_bucket = self._position_bucket(
+                key_pos[..., None, :] - query_pos[..., :, None],
+                num_buckets=self.num_buckets,
+                max_distance=self.max_distance,
+            )
+            relative_position_bucket = torch.where(
+                rel_buckets == 0,
+                inner_segment_bucket[None, :, :],
+                relative_position_bucket,
+            )
+            # (batch, len_q, len_k)
+
+        # (batch, len_q, len_k, num_heads)
+        embeds = F.embedding(relative_position_bucket, self.relative_attention_bias)
+        # (batch, num_heads, len_q, len_k)
+        embeds = embeds.permute(0, 3, 1, 2).contiguous()
+        return embeds
+
+    def _position_bucket(
+        self, relative_position, num_buckets=32, max_distance=128
+    ):
+        relative_buckets = 0
+        num_buckets //= 2
+        relative_buckets = (relative_position > 0).to(torch.int32) * num_buckets
+        relative_position = torch.abs(relative_position)
+
         max_exact = num_buckets // 2
         is_small = relative_position < max_exact
         relative_postion_if_large = max_exact + (

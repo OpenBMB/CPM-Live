@@ -16,11 +16,11 @@
 from typing import List, Optional, Tuple
 import torch
 from ..utils import Config
-from ..layers import Encoder, Embedding, SegmentPositionEmbedding
+from ..layers import Encoder, Embedding, BucketPositionBias
 import bmtrain as bmt
 
 
-class CPMAntConfig(Config):
+class CPMBeeConfig(Config):
     def __init__(
         self,
         vocab_size=30720,
@@ -31,25 +31,21 @@ class CPMAntConfig(Config):
         num_layers=32,
         dropout_p=0.0,
         position_bias_num_buckets=512,
+        position_bias_num_segment_buckets=64,
         position_bias_max_distance=2048,
         eps=1e-6,
         half: bool = True,
-        prompt_types: int = 32,
-        prompt_length: int = 32,
-        segment_types: int = 32,
         mask_modules: Optional[List[Tuple[bool, bool]]] = None,
     ):
 
         super().__init__()
-        self.prompt_types = prompt_types
-        self.prompt_length = prompt_length
-        self.segment_types = segment_types
         self.dim_model = dim_model
         self.num_heads = num_heads
         self.dim_head = dim_head
         self.dim_ff = dim_ff
         self.num_layers = num_layers
         self.position_bias_num_buckets = position_bias_num_buckets
+        self.position_bias_num_segment_buckets = position_bias_num_segment_buckets
         self.position_bias_max_distance = position_bias_max_distance
         self.dropout_p = dropout_p
         self.eps = eps
@@ -61,8 +57,8 @@ class CPMAntConfig(Config):
         self.mask_modules = mask_modules
 
 
-class CPMAnt(bmt.DistributedModule):
-    def __init__(self, config: CPMAntConfig):
+class CPMBee(bmt.DistributedModule):
+    def __init__(self, config: CPMBeeConfig):
 
         super().__init__()
 
@@ -78,20 +74,6 @@ class CPMAnt(bmt.DistributedModule):
             mask_modules=config.mask_modules,
         )
 
-        self.prompt_embedding = Embedding(
-            vocab_size=config.prompt_types * config.prompt_length,
-            embedding_size=config.dim_model,
-            dtype=config.dtype,
-            init_std=0.02,
-        )
-
-        self.segment_embedding = Embedding(
-            vocab_size=config.segment_types,
-            embedding_size=config.dim_model,
-            dtype=config.dtype,
-            init_std=0.02,
-        )
-
         self.input_embedding = Embedding(
             vocab_size=config.vocab_size,
             embedding_size=config.dim_model,
@@ -99,80 +81,77 @@ class CPMAnt(bmt.DistributedModule):
             init_std=0.02,
         )
 
-        self.position_bias = SegmentPositionEmbedding(
+        self.position_bias = BucketPositionBias(
             num_heads=config.num_heads,
-            num_segments=config.segment_types,
             num_buckets=config.position_bias_num_buckets,
+            num_segment_bucket=config.position_bias_num_segment_buckets,
             max_distance=config.position_bias_max_distance,
-            bidirectional=True,
             dtype=config.dtype,
         )
 
-        self.prompt_length = config.prompt_length
-
     def forward(
         self,
-        input: torch.Tensor,  # (batch, seqlen)
-        length: torch.Tensor,  # (batch)
-        context: torch.Tensor,  # (batch, seqlen)
-        position: torch.Tensor,  # (batch, seqlen)
-        segment: torch.Tensor,  # (batch, seqlen)
-        span: torch.Tensor,  # (batch, seqlen)
-        past_key_values=None,  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
-        use_cache=False,
+        input: torch.Tensor,  # (batch, seqlen) long
+        length: torch.Tensor,  # (batch) long
+        context: torch.Tensor,  # (batch, seqlen) bool
+        sample_idx : torch.Tensor,  # (batch, seq_len) long
+        num_segments : torch.Tensor,    # (batch, seq_len) long  number of segments in batch
+        segment: torch.Tensor,  # (batch, seqlen) long  segment id of each token
+        segment_rel_offset : torch.Tensor,  # (batch, seq_len) long segment rel offset in this instance
+        segment_rel : torch.Tensor, # (batch, num_segment_bucket) long  mapping n_segment x n_segment to bucket id
+        span: torch.Tensor,  # (batch, seqlen) long span id of each instance
     ):
 
         batch = input.size(0)
-
-        if past_key_values is None:
-            past_length = 0
-            past_key_values = tuple([None] * self.encoder.num_layers)
-            input_prompt = input[:, : self.prompt_length].contiguous()
-            input_ids = input[:, self.prompt_length :].contiguous()
-
-            prompt_states = self.prompt_embedding(input_prompt)
-            hidden_states = self.input_embedding(input_ids)
-            segment_states = self.segment_embedding(segment)
-            hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
-
-        else:
-            past_length = past_key_values[0][0].size(-2)
-            segment_states = self.segment_embedding(segment)
-            hidden_states = self.input_embedding(input) + segment_states[:, -1:, :]
-
-        seqlen = past_length + input.size(1)
+        seqlen = input.size(1)
 
         with torch.no_grad():
             device = input.device
+
+            # calc segment bucket
+            segment_rel_2d = torch.masked_fill(
+                segment[:, :, None] * num_segments[:, :, None] + segment[:, None, :] + segment_rel_offset[:, :, None],
+                ~((sample_idx[:, :, None] == sample_idx[:, None, :]) & (span[:, None, :] == span[:, :, None])), # not in the same span and sample
+                0,  # avoid torch.gather overflow
+            ).view(batch, seqlen * seqlen)
+
+            segment_bucket = torch.gather(
+                input = segment_rel,
+                dim = 1,
+                index = segment_rel_2d,
+            ).view(batch, seqlen, seqlen)
+            
+            segment_rel_2d = torch.masked_fill(
+                segment_bucket,
+                ~((sample_idx[:, :, None] == sample_idx[:, None, :]) & (span[:, None, :] == span[:, :, None])), # not in the same span and sample
+                1,  # bucket is used for in-context samples
+            )
+
+            # directional mask
             directional_mask_2d = torch.arange(seqlen, device=device) <= torch.arange(
                 seqlen, device=device
             ).view(-1, 1)
+            # sample mask
+            sample_mask_2d = (sample_idx[:, :, None] == 0) | (sample_idx[:, :, None] == sample_idx[:, None, :])
+            # context mask
             attention_mask = context[:, None, :] | (
                 context[:, :, None].logical_not() & directional_mask_2d.view(1, seqlen, seqlen)
             )
-            attention_mask = attention_mask & (span[:, None, :] == span[:, :, None])
+            # span mask
+            attention_mask = attention_mask & sample_mask_2d & (span[:, None, :] == span[:, :, None])
+            # length mask
             mask_1d = (
                 torch.arange(seqlen, device=device)[None, :].repeat(batch, 1) < length[:, None]
             )
             attention_mask = (
                 mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask
             )
+            position = torch.arange(seqlen, device=device).expand(batch, seqlen)
 
-        position_bias = self.position_bias(position, position, segment, segment)
+        position_bias = self.position_bias(position, position, segment_bucket)
 
-        if past_length > 0:
-            attention_mask = attention_mask[:, past_length:, :]
-            position_bias = position_bias[:, :, past_length:, :]
-
-        if use_cache:
-            hidden_states, present_key_values = self.encoder(
-                hidden_states, attention_mask, position_bias, use_cache, past_key_values
-            )
-            logits = self.input_embedding.projection(hidden_states)
-            return logits, hidden_states, present_key_values
-        else:
-            hidden_states = self.encoder(
-                hidden_states, attention_mask, position_bias, use_cache, past_key_values
-            )
-            logits = self.input_embedding.projection(hidden_states)
-            return logits, hidden_states
+        hidden_states = self.encoder(
+            hidden_states, attention_mask, position_bias
+        )
+        logits = self.input_embedding.projection(hidden_states)
+        return logits, hidden_states

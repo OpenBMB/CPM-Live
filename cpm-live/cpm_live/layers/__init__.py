@@ -1,5 +1,5 @@
 from .embedding import Embedding
-from .position_embedding import SegmentPositionEmbedding
+from .position_embedding import SegmentPositionEmbedding, BucketPositionBias
 from .linear import Linear
 from .layernorm import LayerNorm
 from .attention import Attention
