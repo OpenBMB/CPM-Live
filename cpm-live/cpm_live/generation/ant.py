@@ -47,6 +47,7 @@ class CPMAntGeneration:
     def _decode(self, model_inputs, **kwargs):
         raise NotImplementedError("_decode is not implemented.")
 
+
 class CPMAntBeamSearch(CPMAntGeneration):
     def _decode(
         self,
@@ -64,7 +65,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
             generate_length (int, optional, defaults to 100): maximum generation length.
             repetition_coefficient (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
-        """
+        """  # noqa: E501
         # generate_length + 1 for EOS token
         generate_length += 1
 
@@ -292,7 +293,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
             temperature (int, optional, defaults to 0.9): the value that can cool down the logits distribution.
             repetition_coefficient (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
-        """
+        """  # noqa: E501
         # generate_length + 1 for EOS token
         generate_length += 1
 

@@ -84,7 +84,8 @@ def repetition_penalty(
             else:
                 output_tokens = []
         for previous_token in set(output_tokens):
-            # if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
+            # if score < 0 then repetition penalty has to
+            # multiplied to reduce the previous token probability
             if logits[i, previous_token] < 0:
                 logits[i, previous_token] *= repetition_penalty
             else:
