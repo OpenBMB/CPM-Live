@@ -193,8 +193,8 @@ class _MixedDatasetBatchPacker:
                 sub = _build_segment_rel(child)
                 for seg_id_1, depth_1 in sub:
                     for seg_id_2, depth_2 in ret:
-                        n_up = min(node["depth"] - depth_1, self._max_depth - 1)
-                        n_down = min(node["depth"] - depth_2, self._max_depth - 1)
+                        n_up = min(depth_1 - node["depth"], self._max_depth - 1)
+                        n_down = min(depth_2 - node["depth"], self._max_depth - 1)
                         segment_rel[seg_id_1 * num_segments + seg_id_2] = self.rel_to_bucket(n_up, n_down)
                         segment_rel[seg_id_2 * num_segments + seg_id_1] = self.rel_to_bucket(n_down, n_up)
                 ret.extend(sub)
@@ -239,7 +239,7 @@ class _MixedDatasetBatchPacker:
             input_ids = input_ids[:self._max_length]
             context = context[:self._max_length]
             segment_ids = segment_ids[:self._max_length]
-            
+
             if (context == 0).any():
                 # some values are not in context
                 break
@@ -326,8 +326,8 @@ class _MixedDatasetBatchPacker:
                 max_rel = max(max_rel, self._segment_rel[i].shape[0])
             segment_rel = np.zeros((self._batch_size, max_rel), dtype=np.int32)
             spans = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            length = np.zeros(self._batch_size, dtype=np.int32)
-            task_ids = np.zeros(self._batch_size, self._max_length, dtype=np.int32)
+            length = np.zeros((self._batch_size,), dtype=np.int32)
+            task_ids = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
 
             all_task_names : Set[str] = set()
             for i in range(self._batch_size):
@@ -350,8 +350,8 @@ class _MixedDatasetBatchPacker:
                 segment_rel[i, :rel_size] = self._segment_rel[i]
                 
                 span_begin = 0
-                for i, (span_end, task_name) in enumerate(zip(self._spans[i], self._task_ids[i])):
-                    spans[i, span_begin:span_end] = i
+                for span_id, (span_end, task_name) in enumerate(zip(self._spans[i], self._task_ids[i])):
+                    spans[i, span_begin:span_end] = span_id
                     task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
                     span_begin = span_end
                 length[i] = l
@@ -419,11 +419,16 @@ class _MixedDatasetConfigMananger:
 def _mixed_dataset_process(
         config_path : str,
         q_cmd : multiprocessing.Queue,
+        q_cmd_out : multiprocessing.Queue,
         q_data : multiprocessing.Queue,
         rank : int,
         world_size : int,
         packer : _MixedDatasetBatchPacker,
     ):
+    # ignore SIGINT
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     def _build_sample_weights(
             config : List[_MixedDatasetConfig]
         ):
@@ -518,14 +523,14 @@ def _mixed_dataset_process(
                 break
             if cmd == 'stop':
                 should_stop = True
-                q_cmd.put(True)
+                q_cmd_out.put(True)
                 break
             elif cmd == "state_dict":
                 ret = OrderedDict()
                 for c in config:
                     ds_name = "{}.{}".format(c["task_name"], c["dataset_name"])
                     ret[ds_name] = c["dataset"]._state_dict()
-                q_cmd.put(ret)
+                q_cmd_out.put(ret)
             elif cmd == "load_state_dict":
                 state_dict = q_cmd.get()
                 missing = []
@@ -536,13 +541,13 @@ def _mixed_dataset_process(
                     else:
                         # new dataset
                         missing.append(ds_name)
-                q_cmd.put(missing)
+                q_cmd_out.put(missing)
             elif cmd == "start":
                 should_start = True
-                q_cmd.put(True)
+                q_cmd_out.put(True)
             else:
                 raise RuntimeError("Unknown command: {}".format(cmd))
-        
+
         if should_stop:
             break
 
@@ -553,6 +558,11 @@ def _mixed_dataset_process(
             
         if len(config) == 0:
             # no dataset available
+            time.sleep(1)
+            continue
+    
+        if q_data.full():
+            # queue full
             time.sleep(1)
             continue
 
@@ -574,6 +584,13 @@ def _mixed_dataset_process(
         if batch is not None:
             # new batch comming
             q_data.put(batch)
+    
+    # clean queue
+    while True:
+        try:
+            q_data.get_nowait()
+        except Empty:
+            break
 
 class MixedDataset:
     def __init__(self,
@@ -585,11 +602,12 @@ class MixedDataset:
             max_depth : int = 16
         ) -> None:
         self._q_cmd = multiprocessing.Queue()
-        self._q_data = multiprocessing.Queue()
+        self._q_cmd_out = multiprocessing.Queue()
+        self._q_data = multiprocessing.Queue(maxsize=1)
         self._packer = _MixedDatasetBatchPacker(batch_size, max_length, tokenizer, incontext_sample_weight, max_depth)
         self._p = multiprocessing.Process(
             target=_mixed_dataset_process,
-            args=(config_path, self._q_cmd, self._q_data, bmt.rank(), bmt.world_size(), self._packer),
+            args=(config_path, self._q_cmd, self._q_cmd_out, self._q_data, bmt.rank(), bmt.world_size(), self._packer),
         )
         self._p.start()
         self._closed = False
@@ -598,7 +616,7 @@ class MixedDataset:
         if not self._closed:
             self._closed = True
             self._q_cmd.put("stop")
-            assert self._q_cmd.get(), "Failed to stop process"
+            assert self._q_cmd_out.get(), "Failed to stop process"
             self._p.join()
     
     @property
@@ -607,14 +625,17 @@ class MixedDataset:
     
     def start(self):
         self._q_cmd.put("start")
-        self._q_cmd.get()
+        return self._q_cmd_out.get()
     
     def state_dict(self):
         self._q_cmd.put("state_dict")
-        states = self._q_cmd.get()
+        states = self._q_cmd_out.get()
         if not isinstance(states, OrderedDict):
             raise RuntimeError("Invalid state dict {}".format(states))
         if bmt.world_size() == 1:
+            for val in states.values():
+                val["states"].unsqueeze_(0)
+                val["block"].unsqueeze_(0)
             return states
 
         ret = OrderedDict()
@@ -634,15 +655,15 @@ class MixedDataset:
     def load_state_dict(self, data : OrderedDict, strict : bool = False):
         self._q_cmd.put("load_state_dict")
         self._q_cmd.put(data)
-        missing = self._q_cmd.get()
+        missing = self._q_cmd_out.get()
         if strict:
             if len(missing) > 0:
                 raise RuntimeError("Missing dataset state: {}".format(missing))
         return missing
 
-    def get(self):
+    def get(self) -> CPMBeeBatch:
         ret = self._q_data.get()
-        if not isinstance(ret, CPMBeeBatch):
+        if not isinstance(ret, dict):
             raise RuntimeError("Invalid data {}".format(ret))
         return ret
 
@@ -650,3 +671,9 @@ class MixedDataset:
         while True:
             yield self.get()
     
+    def __del__(self):
+        if not self.closed:
+            try:
+                self.close()
+            except Exception:
+                pass

@@ -290,7 +290,7 @@ class DistributedDataset:
         return {
             "states": torch.tensor(self._unused_block, dtype=torch.long, device="cpu"),
             "block": torch.tensor(
-                [[curr_block, inblock_offset, num_unused_block, self._repeat_times]], dtype=torch.long, device="cpu"
+                [curr_block, inblock_offset, num_unused_block, self._repeat_times], dtype=torch.long, device="cpu"
             ),
         }
 
@@ -381,7 +381,7 @@ class DistributedDataset:
                 )
                 self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
         # end
-        self._update_states(False)
+        self._update_states()
 
     def _get_file_path(self, fname):
         return os.path.join(self._path, fname)
@@ -558,7 +558,7 @@ class DatasetBuilder:
         else:
             meta_path = os.path.join(self._path, "meta.bin")
             info: List[FileInfo] = []
-            with open(meta_path, "r", encoding="utf-8") as f:
+            if os.path.exists(meta_path):
                 info = _read_info_list(meta_path)
             last_block = 0
             if len(info) > 0:
