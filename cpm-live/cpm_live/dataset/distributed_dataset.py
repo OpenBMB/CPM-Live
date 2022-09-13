@@ -321,7 +321,7 @@ class DistributedDataset:
 
                 gpu_block = torch.tensor([curr_block, inblock_offset, num_unused_block, self._repeat_times], dtype=torch.long).cuda()
                 global_states = bmt.distributed.all_gather(gpu_states).cpu()    # (world_size, max_unused_blocks)
-                global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 3)
+                global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 4)
                 return {"states": global_states, "block": global_block}
             else:
                 return {

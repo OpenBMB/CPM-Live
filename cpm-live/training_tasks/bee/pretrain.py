@@ -627,7 +627,7 @@ class MixedDataset:
 
             gpu_block = v["block"].cuda()
             global_states = bmt.distributed.all_gather(gpu_states).cpu()    # (world_size, max_unused_blocks)
-            global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 3)
+            global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 4)
             ret[k] = {"states": global_states, "block": global_block}
         return ret
     
