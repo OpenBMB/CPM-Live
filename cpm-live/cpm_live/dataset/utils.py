@@ -78,9 +78,7 @@ def shuffle_dataset(
             for data in iterator:
                 bucket_id = int(random.random() * num_buckets)
                 len_data = len(data)
-                f_tmp[bucket_id].write(
-                    struct.pack("I", len_data) + data
-                )
+                f_tmp[bucket_id].write(struct.pack("I", len_data) + data)
         finally:
             # close all files
             for fp in f_tmp:
@@ -89,7 +87,12 @@ def shuffle_dataset(
         f_tmp = []
 
         # Step 2: shuffle inside bucket
-        with build_dataset(path_tgt, "%s.shuffle" % _random_string(), block_size=block_size, serializer=RawSerializer()) as writer:
+        with build_dataset(
+            path_tgt,
+            "%s.shuffle" % _random_string(),
+            block_size=block_size,
+            serializer=RawSerializer(),
+        ) as writer:
             iterator = tmp_files
             if progress_bar:
                 iterator = tqdm(tmp_files, desc="Shuffle step 2/2")
@@ -136,7 +139,7 @@ def compact_dataset(path: str):
     else:
         raise ValueError("Dataset not exists")
 
-    nw_info : List[FileInfo] = []
+    nw_info: List[FileInfo] = []
     curr_block = 0
     for v in info:
         if not os.path.exists(v.file_name):
@@ -184,6 +187,7 @@ def mask_dataset(path: str, dbname: str, mask: bool = True):
         if v.file_name == dbname:
             v.mask = mask
     _write_info_list(meta_path, info)
+
 
 def merge_dataset(dst: str, src: str):
 

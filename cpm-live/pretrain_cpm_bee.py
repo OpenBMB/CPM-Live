@@ -2,7 +2,6 @@ import time
 from typing import Dict
 import torch
 import bmtrain as bmt
-import json
 import os
 from cpm_live import get_args
 import distutils.version  # noqa: F401
@@ -11,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMAntTokenizer
 from training_tasks.bee import MixedDataset
+
 
 def get_tokenizer(args):
     tokenizer = CPMAntTokenizer()
@@ -104,12 +104,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
     global_token_pass = 0.0
     global_world_size = bmt.world_size()
     dataloader = MixedDataset(
-        "datasets.json",
-        args.batch_size,
-        args.max_length,
-        tokenizer,
-        [0.5, 0.25, 0.25],
-        max_depth=8
+        "datasets.json", args.batch_size, args.max_length, tokenizer, [0.5, 0.25, 0.25], max_depth=8
     )
 
     if os.path.exists(os.path.join(args.save, args.save_name + ("-%d.data.pt" % start_step))):
@@ -156,7 +151,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 input_segment_ids,
                 input_segment_rel_offset,
                 input_segment_rel,
-                input_span
+                input_span,
             )
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
             global_loss = bmt.sum_loss(loss).item()
@@ -180,13 +175,15 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
 
             with torch.no_grad():
                 task_num = len(task_names)
-                logits_tmp : torch.Tensor = logits.view(1, -1, logits.size(-1)).expand(task_num, -1, -1)
+                logits_tmp: torch.Tensor = logits.view(1, -1, logits.size(-1)).expand(
+                    task_num, -1, -1
+                )
                 targets_tmp = targets.expand(task_num, -1, -1)
-                
+
                 task = torch.arange(task_num, dtype=torch.long, device="cuda")[:, None, None]
                 targets_tmp = torch.where(task_ids == task, targets_tmp, -100)
 
-                task_loss_map : Dict[str, float] = {}
+                task_loss_map: Dict[str, float] = {}
                 for i in range(task_num):
                     task_loss = loss_func(logits_tmp[i, :], targets_tmp[i, :].view(-1))
                     global_task_loss = float(bmt.sum_loss(task_loss).item())
@@ -195,10 +192,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
             local_total_rate = torch.Tensor([input_length.float().mean() / args.max_length]).cuda()
             local_total_rate = bmt.sum_loss(local_total_rate).item()
             global_token_pass += (
-                global_world_size
-                * local_total_rate
-                * args.max_length
-                * args.batch_size
+                global_world_size * local_total_rate * args.max_length * args.batch_size
             )
             avg_time = average_time.value
 
@@ -213,7 +207,10 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 "avg time (s)": avg_time,
                 "token/max": local_total_rate,
                 "token pass": global_token_pass,
-                "throughout (token/s)": args.max_length * args.batch_size * local_total_rate / avg_time,
+                "throughout (token/s)": args.max_length
+                * args.batch_size
+                * local_total_rate
+                / avg_time,
                 "grad_norm": grad_norm.item(),
                 "mask/max": ((targets >= 0).sum(-1).float().mean() / args.max_length).item(),
                 "num_gpus": global_world_size,
@@ -248,7 +245,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 model_inspect = bmt.inspect.inspect_model(model, "*")
                 bmt.print_rank(bmt.inspect.format_summary(model_inspect))
                 train_info["model_inspect"] = model_inspect
-            
+
             # write log here
             if bmt.rank() == 0:
                 writer.add_scalar("Loss/train", global_loss, iteration)
@@ -271,7 +268,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 del all_states
     finally:
         dataloader.close()
-        
+
     bmt.save(model, os.path.join(args.save, args.save_name + ".pt"))
 
 

@@ -21,12 +21,12 @@ import torch.nn.functional as F
 class SegmentPositionEmbedding(bmt.DistributedModule):
     def __init__(
         self,
-        num_heads : int,
-        num_segments : int=1,
-        num_buckets : int=32,
-        max_distance : int=128,
-        bidirectional : bool=False,
-        dtype : torch.dtype=torch.half,
+        num_heads: int,
+        num_segments: int = 1,
+        num_buckets: int = 32,
+        max_distance: int = 128,
+        bidirectional: bool = False,
+        dtype: torch.dtype = torch.half,
         init_mean: float = 0.0,
         init_std: float = 1,
     ):
@@ -126,17 +126,18 @@ class SegmentPositionEmbedding(bmt.DistributedModule):
         )
         return relative_buckets
 
+
 class BucketPositionBias(bmt.DistributedModule):
     def __init__(
-            self,
-            num_heads : int,
-            num_buckets : int=32,
-            num_segment_bucket : int = 32,
-            max_distance : int=128,
-            dtype : torch.dtype=torch.half,
-            init_mean: float = 0.0,
-            init_std: float = 1,
-        ) -> None:
+        self,
+        num_heads: int,
+        num_buckets: int = 32,
+        num_segment_bucket: int = 32,
+        max_distance: int = 128,
+        dtype: torch.dtype = torch.half,
+        init_mean: float = 0.0,
+        init_std: float = 1,
+    ) -> None:
         super().__init__()
 
         self.num_heads = num_heads
@@ -150,12 +151,12 @@ class BucketPositionBias(bmt.DistributedModule):
                 torch.nn.init.normal_, mean=init_mean, std=init_std
             ),
         )
-    
+
     def forward(
         self,
-        query_pos: torch.Tensor,    # (batch, len_q)
-        key_pos: torch.Tensor,      # (batch, len_k)
-        rel_buckets : torch.Tensor  # (batch, len_q, len_k)
+        query_pos: torch.Tensor,  # (batch, len_q)
+        key_pos: torch.Tensor,  # (batch, len_k)
+        rel_buckets: torch.Tensor,  # (batch, len_q, len_k)
     ):
         with torch.no_grad():
 
@@ -164,7 +165,11 @@ class BucketPositionBias(bmt.DistributedModule):
             querylen = query_pos.size(1)
 
             assert key_pos.size(0) == query_pos.size(0)
-            assert rel_buckets.size(0) == batch and rel_buckets.size(1) == querylen and rel_buckets.size(2) == keylen
+            assert (
+                rel_buckets.size(0) == batch
+                and rel_buckets.size(1) == querylen
+                and rel_buckets.size(2) == keylen
+            )
 
             relative_position_bucket = rel_buckets - 1 + self.num_buckets  # 与相对位置编码区间不重叠
 
@@ -187,9 +192,7 @@ class BucketPositionBias(bmt.DistributedModule):
         embeds = embeds.permute(0, 3, 1, 2).contiguous()
         return embeds
 
-    def _position_bucket(
-        self, relative_position, num_buckets=32, max_distance=128
-    ):
+    def _position_bucket(self, relative_position, num_buckets=32, max_distance=128):
         relative_buckets = 0
         num_buckets //= 2
         relative_buckets = (relative_position > 0).to(torch.int32) * num_buckets

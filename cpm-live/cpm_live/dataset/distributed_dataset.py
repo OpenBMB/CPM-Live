@@ -46,7 +46,7 @@ class FileInfo:
         self.nbytes = nbytes
         self.nlines = nlines
         self.mask = mask
-    
+
     def state_dict(self):
         return {
             "file_name": self.file_name,
@@ -54,9 +54,9 @@ class FileInfo:
             "block_end": self.block_end,
             "nbytes": self.nbytes,
             "nlines": self.nlines,
-            "mask": self.mask
+            "mask": self.mask,
         }
-    
+
     def load_state_dict(self, d):
         self.file_name = d["file_name"]
         self.block_begin = d["block_begin"]
@@ -68,22 +68,24 @@ class FileInfo:
     def dumps(self) -> str:
         return json.dumps(self.state_dict())
 
-    def loads(self, data : str) -> "FileInfo":
+    def loads(self, data: str) -> "FileInfo":
         self.load_state_dict(json.loads(data))
         return self
-    
-    def dump(self, fp : io.TextIOWrapper) -> "FileInfo":
+
+    def dump(self, fp: io.TextIOWrapper) -> "FileInfo":
         fp.write(self.dumps())
         return self
-    
-    def load(self, fp : io.TextIOWrapper) -> "FileInfo":
+
+    def load(self, fp: io.TextIOWrapper) -> "FileInfo":
         self.loads(fp.read())
         return self
 
+
 _DEFAULT_BLOCK_SIZE = 16 << 20
 
-def _read_info_list(meta_path : str) -> List[FileInfo]:
-    info : List[FileInfo] = []
+
+def _read_info_list(meta_path: str) -> List[FileInfo]:
+    info: List[FileInfo] = []
     with open(meta_path, "r", encoding="utf-8") as f:
         for line in f.readlines():
             line = line.strip()
@@ -91,7 +93,8 @@ def _read_info_list(meta_path : str) -> List[FileInfo]:
                 info.append(FileInfo().loads(line))
     return info
 
-def _write_info_list(meta_path : str, info : List[FileInfo]):
+
+def _write_info_list(meta_path: str, info: List[FileInfo]):
     base_path = os.path.dirname(meta_path)
     random_fname = os.path.join(base_path, ".meta.bin.%s" % _random_string())
     with open(random_fname, "w", encoding="utf-8") as f:
@@ -100,13 +103,16 @@ def _write_info_list(meta_path : str, info : List[FileInfo]):
     os.rename(random_fname, meta_path)
 
 
-def _filtered_range(begin : int, end : int, rank : int, world_size : int, filter_set : Optional[Set[int]] = None):
+def _filtered_range(
+    begin: int, end: int, rank: int, world_size: int, filter_set: Optional[Set[int]] = None
+):
     begin = begin + (rank + (world_size - (begin % world_size))) % world_size
 
     if filter_set is not None:
         return [i for i in range(begin, end, world_size) if i in filter_set]
     else:
         return [i for i in range(begin, end, world_size)]
+
 
 class DistributedDataset:
     """Open dataset in readonly mode.
@@ -133,9 +139,9 @@ class DistributedDataset:
         path: str,
         rank: int = 0,
         world_size: int = 1,
-        serializer : Optional[Serializer] = None,
-        block_size : int =_DEFAULT_BLOCK_SIZE,
-        max_repeat_times : Optional[int] = None
+        serializer: Optional[Serializer] = None,
+        block_size: int = _DEFAULT_BLOCK_SIZE,
+        max_repeat_times: Optional[int] = None,
     ) -> None:
         # config
         self._path = path
@@ -150,7 +156,7 @@ class DistributedDataset:
         self.serializer = serializer
 
         # dataset meta
-        self._unused_block : List[int] = []
+        self._unused_block: List[int] = []
         self._file_info: List[FileInfo] = []
         self._file_ends: List[int] = []
         self._total_blocks = 0
@@ -221,15 +227,27 @@ class DistributedDataset:
 
         if total_blocks > 0:
             unused_block_set = set(self._unused_block)
-            nw_unused_block : List[int] = []
+            nw_unused_block: List[int] = []
             for i in range(len(info)):
                 v = info[i]
                 if not v.mask:
                     if i < old_len:
-                        nw_unused_block.extend(_filtered_range(v.block_begin, v.block_end, self._rank, self._world_size, unused_block_set))
+                        nw_unused_block.extend(
+                            _filtered_range(
+                                v.block_begin,
+                                v.block_end,
+                                self._rank,
+                                self._world_size,
+                                unused_block_set,
+                            )
+                        )
                     else:
-                        nw_unused_block.extend(_filtered_range(v.block_begin, v.block_end, self._rank, self._world_size))
-             
+                        nw_unused_block.extend(
+                            _filtered_range(
+                                v.block_begin, v.block_end, self._rank, self._world_size
+                            )
+                        )
+
             # re-shuffle unused blocks
             random.shuffle(nw_unused_block)
             self._unused_block = nw_unused_block
@@ -246,23 +264,29 @@ class DistributedDataset:
         assert len(self._file_ends) == len(self._file_info)
 
     def _mask_file(self, f: FileInfo):
-        self._unused_block = [block_id for block_id in self._unused_block if block_id < f.block_begin or block_id >= f.block_end]
+        self._unused_block = [
+            block_id
+            for block_id in self._unused_block
+            if block_id < f.block_begin or block_id >= f.block_end
+        ]
 
     def _get_block_file(self, block_id: int):
         # find block in which file
         file_idx = bisect.bisect_right(self._file_ends, block_id)
         return self._file_info[file_idx]
-    
+
     def _prepare_new_epoch(self):
         if self._max_repeat_times is not None:
             if self._repeat_times >= self._max_repeat_times:
                 raise EOFError("End of dataset")
-        
+
         self._repeat_times += 1
-        nw_unused_block : List[int] = []
+        nw_unused_block: List[int] = []
         for v in self._file_info:
             if not v.mask:
-                nw_unused_block.extend(_filtered_range(v.block_begin, v.block_end, self._rank, self._world_size))
+                nw_unused_block.extend(
+                    _filtered_range(v.block_begin, v.block_end, self._rank, self._world_size)
+                )
         random.shuffle(nw_unused_block)
         self._unused_block = nw_unused_block
 
@@ -272,10 +296,10 @@ class DistributedDataset:
             self._prepare_new_epoch()
             if len(self._unused_block) == 0:
                 raise RuntimeError("Empty dataset")
-        
+
         mn_block: int = self._unused_block.pop()
         return mn_block
-    
+
     def _state_dict(self):
         self._update_states()
         num_unused_block = len(self._unused_block)
@@ -286,11 +310,13 @@ class DistributedDataset:
         else:
             curr_block = -1
             inblock_offset = 0
-        
+
         return {
             "states": torch.tensor(self._unused_block, dtype=torch.long, device="cpu"),
             "block": torch.tensor(
-                [curr_block, inblock_offset, num_unused_block, self._repeat_times], dtype=torch.long, device="cpu"
+                [curr_block, inblock_offset, num_unused_block, self._repeat_times],
+                dtype=torch.long,
+                device="cpu",
             ),
         }
 
@@ -315,19 +341,30 @@ class DistributedDataset:
         with torch.no_grad():
             if self._world_size > 1:
                 gpu_num_unused_block = torch.tensor([num_unused_block], dtype=torch.long).cuda()
-                max_unused_blocks = bmt.distributed.all_reduce(gpu_num_unused_block, op="max").cpu().item()
+                max_unused_blocks = (
+                    bmt.distributed.all_reduce(gpu_num_unused_block, op="max").cpu().item()
+                )
                 gpu_states = torch.full((max_unused_blocks,), -1, dtype=torch.long).cuda()
-                gpu_states[:num_unused_block] = torch.tensor(self._unused_block, dtype=torch.long).cuda()
+                gpu_states[:num_unused_block] = torch.tensor(
+                    self._unused_block, dtype=torch.long
+                ).cuda()
 
-                gpu_block = torch.tensor([curr_block, inblock_offset, num_unused_block, self._repeat_times], dtype=torch.long).cuda()
-                global_states = bmt.distributed.all_gather(gpu_states).cpu()    # (world_size, max_unused_blocks)
-                global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 4)
+                gpu_block = torch.tensor(
+                    [curr_block, inblock_offset, num_unused_block, self._repeat_times],
+                    dtype=torch.long,
+                ).cuda()
+                global_states = bmt.distributed.all_gather(
+                    gpu_states
+                ).cpu()  # (world_size, max_unused_blocks)
+                global_block = bmt.distributed.all_gather(gpu_block).cpu()  # (world_size, 4)
                 return {"states": global_states, "block": global_block}
             else:
                 return {
                     "states": torch.tensor([self._unused_block], dtype=torch.long, device="cpu"),
                     "block": torch.tensor(
-                        [[curr_block, inblock_offset, num_unused_block, self._repeat_times]], dtype=torch.long, device="cpu"
+                        [[curr_block, inblock_offset, num_unused_block, self._repeat_times]],
+                        dtype=torch.long,
+                        device="cpu",
                     ),
                 }
 
@@ -342,8 +379,8 @@ class DistributedDataset:
             >>> state = dataset.state_dict()
             >>>
         """
-        block_states : torch.LongTensor = state["states"]
-        block_info : torch.LongTensor = state["block"]
+        block_states: torch.LongTensor = state["states"]
+        block_info: torch.LongTensor = state["block"]
 
         if block_states.size(0) != self._world_size:
             if strict:
@@ -355,20 +392,25 @@ class DistributedDataset:
                 self._fp = None
                 self._curr_fname = None
                 self._repeat_times = int(block_info[0, 3].item())
-                
+
                 # re-shuffle unused blocks
-                nw_unused_block : List[int] = []
+                nw_unused_block: List[int] = []
                 for i in range(block_states.size(0)):
                     # filter blocks that are not in this rank
-                    num_unused_blocks : int = int(block_info[i, 2].item())
-                    nw_unused_block.extend([
-                        block_id for block_id in block_states[i, :num_unused_blocks].tolist()
+                    num_unused_blocks: int = int(block_info[i, 2].item())
+                    nw_unused_block.extend(
+                        [
+                            block_id
+                            for block_id in block_states[i, :num_unused_blocks].tolist()
                             if block_id % self._world_size == self._rank
-                    ])
+                        ]
+                    )
                 random.shuffle(nw_unused_block)
                 self._unused_block = nw_unused_block
         else:
-            curr_block, inblock_offset, num_unused_blocks, self._repeat_times = block_info[self._rank].tolist()
+            curr_block, inblock_offset, num_unused_blocks, self._repeat_times = block_info[
+                self._rank
+            ].tolist()
 
             if curr_block == -1:
                 self._curr_block = None
@@ -438,8 +480,12 @@ class DistributedDataset:
 
 
 class SimpleDataset(DistributedDataset):
-    def __init__(self, path: str, serializer : Optional[Serializer] = None, block_size=_DEFAULT_BLOCK_SIZE) -> None:
-        super().__init__(path, 0, 1, serializer=serializer, block_size=block_size, max_repeat_times=1)
+    def __init__(
+        self, path: str, serializer: Optional[Serializer] = None, block_size=_DEFAULT_BLOCK_SIZE
+    ) -> None:
+        super().__init__(
+            path, 0, 1, serializer=serializer, block_size=block_size, max_repeat_times=1
+        )
 
     def __iter__(self):
         while True:
@@ -455,7 +501,7 @@ class SimpleDataset(DistributedDataset):
 
 
 class DatasetWriter:
-    def __init__(self, fname : str, block_size : int, serializer : Optional[Serializer] = None):
+    def __init__(self, fname: str, block_size: int, serializer: Optional[Serializer] = None):
         self._fname = fname
         self._block_size = block_size
         self._fp = open(self._fname, "wb")
@@ -517,7 +563,13 @@ class DatasetWriter:
 
 
 class DatasetBuilder:
-    def __init__(self, path: str, dbname: str, block_size=_DEFAULT_BLOCK_SIZE, serializer : Optional[Serializer] = None) -> None:
+    def __init__(
+        self,
+        path: str,
+        dbname: str,
+        block_size=_DEFAULT_BLOCK_SIZE,
+        serializer: Optional[Serializer] = None,
+    ) -> None:
         self._block_size = block_size
         self._path = path
         self._dbname = dbname
@@ -580,7 +632,12 @@ class DatasetBuilder:
         self._writer = None
 
 
-def build_dataset(path: str, dbname: str, block_size: int = _DEFAULT_BLOCK_SIZE, serializer : Optional[Serializer] = None):
+def build_dataset(
+    path: str,
+    dbname: str,
+    block_size: int = _DEFAULT_BLOCK_SIZE,
+    serializer: Optional[Serializer] = None,
+):
     """Open the dataset in write mode and returns a writer.
 
     Args:
