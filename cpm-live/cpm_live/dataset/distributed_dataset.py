@@ -275,6 +275,24 @@ class DistributedDataset:
         
         mn_block: int = self._unused_block.pop()
         return mn_block
+    
+    def _state_dict(self):
+        self._update_states()
+        num_unused_block = len(self._unused_block)
+        if (self._fp is not None) and (self._curr_block is not None):
+            curr_block = self._curr_block
+            curr_f = self._get_block_file(curr_block)
+            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * self._block_size
+        else:
+            curr_block = -1
+            inblock_offset = 0
+        
+        return {
+            "states": torch.tensor(self._unused_block, dtype=torch.long, device="cpu"),
+            "block": torch.tensor(
+                [[curr_block, inblock_offset, num_unused_block, self._repeat_times]], dtype=torch.long, device="cpu"
+            ),
+        }
 
     def state_dict(self):
         """Returns a state dict representing the read states of the dataset.
@@ -301,7 +319,7 @@ class DistributedDataset:
                 gpu_states = torch.full((max_unused_blocks,), -1, dtype=torch.long).cuda()
                 gpu_states[:num_unused_block] = torch.tensor(self._unused_block, dtype=torch.long).cuda()
 
-                gpu_block = torch.tensor([curr_block, inblock_offset, num_unused_block], dtype=torch.long).cuda()
+                gpu_block = torch.tensor([curr_block, inblock_offset, num_unused_block, self._repeat_times], dtype=torch.long).cuda()
                 global_states = bmt.distributed.all_gather(gpu_states).cpu()    # (world_size, max_unused_blocks)
                 global_block = bmt.distributed.all_gather(gpu_block).cpu()      # (world_size, 3)
                 return {"states": global_states, "block": global_block}
@@ -309,7 +327,7 @@ class DistributedDataset:
                 return {
                     "states": torch.tensor([self._unused_block], dtype=torch.long, device="cpu"),
                     "block": torch.tensor(
-                        [[curr_block, inblock_offset, num_unused_block]], dtype=torch.long, device="cpu"
+                        [[curr_block, inblock_offset, num_unused_block, self._repeat_times]], dtype=torch.long, device="cpu"
                     ),
                 }
 
@@ -336,6 +354,7 @@ class DistributedDataset:
                 self._curr_block = None
                 self._fp = None
                 self._curr_fname = None
+                self._repeat_times = int(block_info[0, 3].item())
                 
                 # re-shuffle unused blocks
                 nw_unused_block : List[int] = []
@@ -349,7 +368,7 @@ class DistributedDataset:
                 random.shuffle(nw_unused_block)
                 self._unused_block = nw_unused_block
         else:
-            curr_block, inblock_offset, num_unused_blocks = block_info[self._rank].tolist()
+            curr_block, inblock_offset, num_unused_blocks, self._repeat_times = block_info[self._rank].tolist()
 
             if curr_block == -1:
                 self._curr_block = None
