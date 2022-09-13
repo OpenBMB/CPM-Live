@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 class BeamHypotheses(object):
     def __init__(self, n_hyp, max_len, length_penalty, early_stopping):
@@ -56,7 +57,7 @@ def _repetition_penalty(
     end_idx=None,
     window_size=None,
 ):
-    # only conduct repetition penaly for the output
+    # only conduct repetition penalty for the output
     assert repetition_penalty >= 1, "repetition penalty coefficient should >= 1"
     # repetition penalty (from CTRL paper https://arxiv.org/abs/1909.05858)
     for i in range(batch_size * num_beams):
@@ -81,15 +82,17 @@ def _repetition_penalty(
 
 
 def beam_search(
-    self, model_inputs, beam_size, generate_length, repetition_penalty=1.0, repetition_window=None
+    model, tokenizer, model_inputs, beam_size, generate_length, repetition_penalty=1.0, repetition_window=None
 ):
     """
     Beam search
     Args:
-        model_inputs (dict): input ids
-        beam_size (int): beam size of beam search
-        generate_length (int): maximum generation length
-        repetition_penalty (float, optional): repetition penalty coefficient, 1.0 means no penalty
+        model: model used for generation
+        tokenizer: tokenizer used by model
+        model_inputs (dict): input ids.
+        beam_size (int): beam size of beam search.
+        generate_length (int): maximum generation length.
+        repetition_penalty (float, optional): repetition penalty coefficient, 1.0 means no penalty.
         repetition_window (int, optional): window size of repetition penalty, None means that all output tokens are penalized.
     """
     # generate_length + 1 for EOS token
@@ -158,7 +161,7 @@ def beam_search(
     past_key_values = None
     for i in range(generate_length + 1):
         if i == 0:
-            logits, _, past_key_values = self.model(
+            logits, _, past_key_values = model(
                 input=input,
                 length=length,
                 context=context,
@@ -169,7 +172,7 @@ def beam_search(
                 use_cache=True,
             )
         else:
-            logits, _, past_key_values = self.model(
+            logits, _, past_key_values = model(
                 input=input[:, -1:],
                 length=length,
                 context=context,
@@ -182,7 +185,7 @@ def beam_search(
 
         # skip all steps when we are done with each sentence
         if all(done):
-            break  # Note: break not supports multi-GPUs
+            break
 
         # (batch * beam, seqlen, model_dim)
         logits = logits[:, -1, :]
@@ -218,7 +221,7 @@ def beam_search(
                 next_scores[sent_id].max().item(), i
             )
             if done[sent_id]:
-                next_batch_beam.extend([(0, self.tokenizer.pad_id, 0)] * beam_size)  # pad the batch
+                next_batch_beam.extend([(0, tokenizer.pad_id, 0)] * beam_size)  # pad the batch
                 continue
 
             # next sentence beam content
@@ -232,12 +235,11 @@ def beam_search(
                 word_id = idx % scores.size(-1)
 
                 # end of sentence, or next word
-                if word_id == self.tokenizer.eos_id or i == generate_length:
-                    if i > 0:
-                        generated_hyps[sent_id].add(
-                            input[sent_id * beam_size + beam_id, pred_start_index:].clone(),
-                            value.item(),
-                        )
+                if word_id == tokenizer.eos_id or i == generate_length:
+                    generated_hyps[sent_id].add(
+                        input[sent_id * beam_size + beam_id, pred_start_index:].clone().cpu().tolist(),
+                        value.item(),
+                    )
                 else:
                     next_sent_beam.append((value, word_id, sent_id * beam_size + beam_id))
 
@@ -248,11 +250,11 @@ def beam_search(
             # update next beam content
             assert len(next_sent_beam) == 0 if i == generate_length else beam_size
             if len(next_sent_beam) == 0:
-                next_sent_beam = [(0, self.tokenizer.pad_id, 0)] * beam_size  # pad the batch
+                next_sent_beam = [(0, tokenizer.pad_id, 0)] * beam_size  # pad the batch
             next_batch_beam.extend(next_sent_beam)
             assert len(next_batch_beam) == beam_size * (sent_id + 1)
 
-        # At the last step, we should not add the token to the next position
+        # we have reached the last step
         if i == generate_length:
             break
 
@@ -289,5 +291,130 @@ def beam_search(
     for i, hypotheses in enumerate(generated_hyps):
         best_hyp = max(hypotheses.hyp, key=lambda x: x[0])[1]
         results.append(best_hyp)
+
+    return results
+
+def _top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("inf")):
+    # This function has been mostly taken from huggingface conversational ai code at
+    # https://medium.com/huggingface/how-to-build-a-state-of-the-art-conversational-ai-with-transfer-learning-2d818ac26313
+
+    if top_k > 0:
+        # Remove all tokens with a probability less than the last token of the top-k
+        indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+        logits[indices_to_remove] = filter_value
+
+    batch_size = logits.size()[0]
+    if top_p > 0.0:
+        logits=logits.view(batch_size, -1).contiguous()
+        for index in range(len(logits)):
+
+            sorted_logits, sorted_indices = torch.sort(logits[index].view(-1), descending=True)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+            # Remove tokens with cumulative probability above the threshold
+            sorted_indices_to_remove = cumulative_probs > top_p
+            # Shift the indices to the right to keep also the first token above the threshold
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+            indices_to_remove = sorted_indices[sorted_indices_to_remove]
+            logits[index][indices_to_remove] = filter_value
+
+        logits=logits.view(batch_size, -1).contiguous()
+
+    return logits
+
+def top_p_top_k_sampling(
+    model, tokenizer, model_inputs, generate_length, top_k=0, top_p=0.9, temperature=1.0, repetition_penalty=1.0, repetition_window=None
+):
+    """
+    Top-k and top-p sampling.
+    Args:
+        model: model used for generation
+        tokenizer: tokenizer used by model
+        model_inputs (dict): input ids
+        generate_length (int): maximum generation length
+        top_k (int, optional, defaults to 0): keep only top k tokens with highest probability. 0 means keeping all tokens.
+        top_p (int, optional, defaults to 0.9): keep the top tokens with cumulative probability >= top_p.
+        temperature (int, optional, defaults to 1.0): the value that can cool down the logits distribution.
+        repetition_penalty (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
+        repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
+    """
+    # generate_length + 1 for EOS token
+    generate_length += 1
+
+    input = model_inputs["input"]
+    length = model_inputs["length"]
+    context = model_inputs["context"]
+    position = model_inputs["position"]
+    segment = model_inputs["segment"]
+    span = model_inputs["span"]
+    batch_size = input.size(0)
+
+    pred_start_index = input.size(-1)
+    past_key_values = None
+    done = [False for _ in range(batch_size)]
+    results = [None for _ in range(batch_size)]
+    for i in range(generate_length):
+        if i == 0:
+            logits, _, past_key_values = model(
+                input=input,
+                length=length,
+                context=context,
+                position=position,
+                segment=segment,
+                span=span,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+        else:
+            logits, _, past_key_values = model(
+                input=input[:, -1:],
+                length=length,
+                context=context,
+                position=position,
+                segment=segment,
+                span=span,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+
+        logits = logits[:, -1, :]
+
+        _repetition_penalty(
+            logits,
+            batch_size,
+            1,
+            input,
+            repetition_penalty,
+            pred_start_index,
+            input.size(-1) - 1,
+            repetition_window,
+        )
+        
+        logits = logits / temperature
+        logits = _top_k_top_p_filtering(logits, top_k=top_k, top_p=top_p)
+
+        probs = F.softmax(logits, dim=-1)
+        next_token = torch.multinomial(probs, num_samples=1)
+        
+        for idx in range(batch_size):
+            if not done[idx] and (next_token[idx].item() == tokenizer.eos_id or i == generate_length - 1):
+                done[idx] = True
+                results[idx] = input[idx, pred_start_index:].clone().cpu().tolist()
+
+        if sum(done) == batch_size:
+            break
+        
+        # update input ids
+        input = torch.cat([input, next_token], dim=-1)
+        length += 1
+        context = torch.cat(
+            [context, torch.ones((context.size(0), 1), dtype=torch.int, device=context.device)],
+            dim=-1,
+        )
+        position = torch.cat([position, position[:, -1:] + 1], dim=-1)
+        segment = torch.cat(
+            [segment, segment[:, -1:]], dim=-1
+        )  # segment id always the same as the previous token
+        span = torch.cat([span, span[:, -1:]], dim=-1)
 
     return results
