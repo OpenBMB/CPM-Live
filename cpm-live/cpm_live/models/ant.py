@@ -37,6 +37,7 @@ class CPMAntConfig(Config):
         prompt_length: int = 32,
         segment_types: int = 32,
         mask_modules: Optional[List[Tuple[bool, bool]]] = None,
+        **kwargs,
     ):
 
         super().__init__()
