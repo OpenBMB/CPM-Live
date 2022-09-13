@@ -110,6 +110,10 @@ class CPMAntTokenizer(object):
     @property
     def unk_id(self):
         return self.encoder[self.unk_token]
+    
+    @property
+    def newline_id(self):
+        return self.encoder["\n"]
 
     def __len__(self):
         return len(self.encoder)
