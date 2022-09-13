@@ -147,6 +147,7 @@ class CPMBee(bmt.DistributedModule):
             )
             position = torch.arange(seqlen, device=device).expand(batch, seqlen)
 
+        hidden_states = self.input_embedding(input)
         position_bias = self.position_bias(position, position, segment_bucket)
 
         hidden_states = self.encoder(
