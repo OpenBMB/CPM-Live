@@ -121,8 +121,7 @@ class CPMBee(bmt.DistributedModule):
                 index = segment_rel_2d,
             ).view(batch, seqlen, seqlen)
             
-            segment_rel_2d = torch.masked_fill(
-                segment_bucket,
+            segment_bucket.masked_fill_(
                 ~((sample_idx[:, :, None] == sample_idx[:, None, :]) & (span[:, None, :] == span[:, :, None])), # not in the same span and sample
                 1,  # bucket is used for in-context samples
             )
