@@ -215,7 +215,7 @@ class _MixedDatasetBatchPacker:
         context = np.zeros((ids.shape[0],), dtype=np.int8)
         for i, (begin, end) in enumerate(segment_bound):
             if segments[i]["need_predict"]:
-                context[begin:end] = 0
+                context[begin] = 1  # skip the first token
             else:
                 context[begin:end] = 1
             segs[begin:end] = i
@@ -641,4 +641,12 @@ class MixedDataset:
         return missing
 
     def get(self):
-        return self._q_data.get()
+        ret = self._q_data.get()
+        if not isinstance(ret, CPMBeeBatch):
+            raise RuntimeError("Invalid data {}".format(ret))
+        return ret
+
+    def __iter__(self):
+        while True:
+            yield self.get()
+    
