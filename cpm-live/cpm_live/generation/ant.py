@@ -172,7 +172,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
                 input.size(-1) - 1,
                 repetition_window,
             )
-            scores = torch.nn.functional.log_softmax(logits, dim=-1)
+            scores = F.log_softmax(logits, dim=-1)
 
             next_scores = scores + beam_scores[:, None].expand_as(
                 scores
@@ -244,7 +244,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
             # re-order batch and internal states
             input = input[beam_idx, :]
 
-            past_key_values = [list(each) if each is not None else each for each in past_key_values]
+            past_key_values = [list(each) if each is not None else each for each in past_key_values]  # type: ignore # noqa: E501
             for key_value_layer in past_key_values:
                 if key_value_layer is not None:
                     key_value_layer[0] = key_value_layer[0][beam_idx]
@@ -358,7 +358,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
                     next_token[idx].item() == self.tokenizer.eos_id or i == generate_length - 1
                 ):
                     done[idx] = True
-                    results[idx] = input[idx, pred_start_index:].clone().cpu().tolist()
+                    results[idx] = input[idx, pred_start_index:].clone().cpu().tolist()  # type: ignore # noqa: E501
 
             if sum(done) == batch_size:
                 break

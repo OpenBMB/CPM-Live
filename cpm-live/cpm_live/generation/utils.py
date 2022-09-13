@@ -6,6 +6,7 @@ def pad(items, key, padding_value=0):
     batch_size = len(items)
     shape = items[0][key].shape
     dim = len(shape)
+    assert dim <= 3
     max_length = max(item[key].shape[-1] for item in items)
     min_length = min(item[key].shape[-1] for item in items)
     dtype = items[0][key].dtype
@@ -16,7 +17,7 @@ def pad(items, key, padding_value=0):
         if max_length == min_length:
             return torch.cat([item[key] for item in items], dim=0)
         tensor = torch.zeros((batch_size, max_length), dtype=dtype) + padding_value
-    elif dim == 3:
+    else:
         tensor = torch.zeros((batch_size, max_length, shape[-1]), dtype=dtype) + padding_value
 
     for i, item in enumerate(items):

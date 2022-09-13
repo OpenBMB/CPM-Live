@@ -210,4 +210,3 @@ class CPMAnt(bmt.DistributedModule):
         )
         logits = self.input_embedding.projection(hidden_states)
         return logits, hidden_states, present_key_values
-
