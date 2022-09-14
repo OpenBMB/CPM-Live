@@ -276,11 +276,12 @@ class DistributedDataset:
         return self._file_info[file_idx]
 
     def _prepare_new_epoch(self):
+        self._repeat_times += 1
+        
         if self._max_repeat_times is not None:
             if self._repeat_times >= self._max_repeat_times:
                 raise EOFError("End of dataset")
 
-        self._repeat_times += 1
         nw_unused_block: List[int] = []
         for v in self._file_info:
             if not v.mask:
