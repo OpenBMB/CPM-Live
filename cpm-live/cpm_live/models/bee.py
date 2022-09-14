@@ -115,7 +115,7 @@ class CPMBee(bmt.DistributedModule):
                 ~(
                     (sample_idx[:, :, None] == sample_idx[:, None, :])
                     & (span[:, None, :] == span[:, :, None])
-                ),  # not in the same span and sample
+                ),  # not in the same span or sample
                 0,  # avoid torch.gather overflow
             ).view(batch, seqlen * seqlen)
 
@@ -129,7 +129,7 @@ class CPMBee(bmt.DistributedModule):
                 ~(
                     (sample_idx[:, :, None] == sample_idx[:, None, :])
                     & (span[:, None, :] == span[:, :, None])
-                ),  # not in the same span and sample
+                ),  # not in the same span or sample
                 1,  # bucket is used for in-context samples
             )
 

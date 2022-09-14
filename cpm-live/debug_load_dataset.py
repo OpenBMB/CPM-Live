@@ -48,7 +48,7 @@ def main():
                     ~(
                         (sample_ids[:, :, None] == sample_ids[:, None, :])
                         & (span[:, None, :] == span[:, :, None])
-                    ),  # not in the same span and sample
+                    ),  # not in the same span or sample
                     0,  # avoid torch.gather overflow
                 ).view(batch, seqlen * seqlen)
 
@@ -62,7 +62,7 @@ def main():
                     ~(
                         (sample_ids[:, :, None] == sample_ids[:, None, :])
                         & (span[:, None, :] == span[:, :, None])
-                    ),  # not in the same span and sample
+                    ),  # not in the same span or sample
                     1,  # bucket is used for in-context samples
                 )
 
