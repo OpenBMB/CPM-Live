@@ -1,6 +1,4 @@
 # flake8: noqa
-import sys
-sys.path.insert(0, "../..")
 from cpm_live.generation import CPMAntBeamSearch, CPMAntRandomSampling
 from cpm_live.models import CPMAnt, CPMAntConfig
 from cpm_live.tokenizers import CPMAntTokenizer
@@ -14,9 +12,9 @@ if __name__ == "__main__":
         "宇宙飞船带着12名狱族源生命，经过层层时空查验，最终降落到这座陆地世界。",
     ]
 
-    config = CPMAntConfig.from_json_file("/bjzhyai03/zz/CPM-Live/cpm-live/config/cpm-ant-10b.json")
+    config = CPMAntConfig.from_json_file("config/cpm-ant-10b.json")
     model = CPMAnt(config=config)
-    ckpt_path = "/bjzhyai03/zz/cpmlive_ckpt/cpm_live_48_4096_checkpoint-228000.pt"
+    ckpt_path = "YOUR_PATH/cpm_live_48_4096_checkpoint-228000.pt"
 
     bmt.load(model, ckpt_path)
     tokenizer = CPMAntTokenizer()
