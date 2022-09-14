@@ -20,7 +20,7 @@ from typing import Any, Dict, Union
 
 
 class Config(object):
-    """enc_dec model configuration"""
+    """model configuration"""
 
     def __init__(self):
         super().__init__()
