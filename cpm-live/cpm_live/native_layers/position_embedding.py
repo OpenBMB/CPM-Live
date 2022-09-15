@@ -38,7 +38,9 @@ class SegmentPositionEmbedding(torch.nn.Module):
         self.bidirectional = bidirectional
         self.num_segments = num_segments
 
-        self.relative_attention_bias = torch.nn.Parameter(torch.empty(num_segments * num_segments + num_buckets, num_heads, dtype=dtype))
+        self.relative_attention_bias = torch.nn.parameter.Parameter(
+            torch.empty(num_segments * num_segments + num_buckets, num_heads, dtype=dtype)
+        )
 
     def forward(
         self,

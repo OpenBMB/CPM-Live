@@ -24,7 +24,7 @@ class LayerNorm(torch.nn.Module):
 
         self.eps = eps
         self.dim_norm = dim_norm
-        self.weight = torch.nn.Parameter(torch.full((dim_norm,), init_var, dtype=dtype))
+        self.weight = torch.nn.parameter.Parameter(torch.full((dim_norm,), init_var, dtype=dtype))
 
     def forward(self, x: torch.Tensor):
         """

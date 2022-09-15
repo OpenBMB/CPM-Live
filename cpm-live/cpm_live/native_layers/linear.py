@@ -33,7 +33,7 @@ class Linear(torch.nn.Module):
         self.dim_out = self.out_features = dim_out
         self.scale_before = scale_before
 
-        self.weight = torch.nn.Parameter(torch.empty((dim_out, dim_in), dtype=dtype))
+        self.weight = torch.nn.parameter.Parameter(torch.empty((dim_out, dim_in), dtype=dtype))
 
     def forward(self, x: torch.Tensor):
         """

@@ -31,7 +31,9 @@ class Embedding(torch.nn.Module):
         super().__init__()
 
         self.dim_model = embedding_size
-        self.weight = torch.nn.Parameter(torch.empty(vocab_size, embedding_size, dtype=dtype))
+        self.weight = torch.nn.parameter.Parameter(
+            torch.empty(vocab_size, embedding_size, dtype=dtype)
+        )
 
     def forward(self, ids: torch.Tensor):
         """
