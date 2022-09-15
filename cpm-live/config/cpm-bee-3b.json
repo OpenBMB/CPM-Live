@@ -8,7 +8,7 @@
     "dropout_p" : 0.0,
     "position_bias_num_buckets" : 256,
     "position_bias_num_segment_buckets": 256,
-    "position_bias_max_distance" : 1024,
+    "position_bias_max_distance" : 2048,
     "eps" : 1e-6,
     "half" : true
 }

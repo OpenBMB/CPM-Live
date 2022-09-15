@@ -1,6 +1,6 @@
 torch>=1.10
-bmtrain
+bmtrain>=0.1.8
 jieba
 tqdm
 tensorboard
-numpy
+numpy>=1.23
