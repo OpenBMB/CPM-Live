@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import time
-from typing import Dict
+from typing import Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
@@ -24,6 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
+from cpm_live.utils import allgather_objects
 from training_tasks.bee import MixedDataset
 
 
@@ -190,19 +191,28 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
 
             with torch.no_grad():
                 task_num = len(task_names)
-                logits_tmp: torch.Tensor = logits.view(1, -1, logits.size(-1)).expand(
-                    task_num, -1, -1
-                )
                 targets_tmp = targets.expand(task_num, -1, -1)
-
                 task = torch.arange(task_num, dtype=torch.int32, device="cuda")[:, None, None]
                 targets_tmp = torch.where(task_ids == task, targets_tmp, torch.scalar_tensor(-100, dtype=torch.int32, device="cuda"))
 
                 task_loss_map: Dict[str, float] = {}
                 for i in range(task_num):
-                    task_loss = loss_func(logits_tmp[i, :], targets_tmp[i, :].view(-1))
-                    global_task_loss = float(bmt.sum_loss(task_loss).item())
-                    task_loss_map[task_names[i]] = global_task_loss
+                    task_loss = loss_func(logits.view(-1, logits.size(-1)), targets_tmp[i, :].view(-1))
+                    # global_task_loss = float(bmt.sum_loss(task_loss).item())
+                    task_loss_map[task_names[i]] = task_loss.item()
+                gatherd_task_loss_map : List[Dict[str, float]] = allgather_objects(task_loss_map)
+                
+                global_task_loss_map : Dict[str, Union[List[float], float]] = {}
+                for local_task_loss_map in gatherd_task_loss_map:
+                    for task_name, task_loss in local_task_loss_map.items():
+                        if task_name not in global_task_loss_map:
+                            global_task_loss_map[task_name] = []
+                        global_task_loss_map[task_name].append(task_loss)
+                
+                task_loss_map = {}
+                for task_name in sorted(list(global_task_loss_map.keys())):
+                    avg_loss = sum(global_task_loss_map[task_name]) / len(global_task_loss_map[task_name])
+                    task_loss_map[task_name] = avg_loss
 
             local_total_rate = torch.Tensor([input_length.float().mean() / args.max_length]).cuda()
             local_total_rate = bmt.sum_loss(local_total_rate).item()
