@@ -1,7 +1,4 @@
 {
     "mlm": 0,
-    "lm": 1,
-    "mix_lm": 2,
-    "summarization": 3,
-    "qa": 4
+    "lm": 1
 }

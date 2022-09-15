@@ -1,6 +1,9 @@
 <div align="center">
 
 <h1>CPM-Ant</h1>
+<p align="center">
+   <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://live.openbmb.org" target="_blank">Blog</a> • <a href="https://github.com/OpenBMB/CPM-Live/tree/master/cpm-live#model-checkpoints">Models</a>
+</p>
 </div>
 
 ## Overview
@@ -12,6 +15,8 @@ CPM-Ant is an open-source Chinese pre-trained language model (PLM) with 10B para
 - **Effective**: [OpenDelta](https://github.com/thunlp/OpenDelta) enables us to adapt CPM-Ant to downstream tasks through delta tuning. In our experiments, by only tuning 6.3 million parameters, CPM-Ant has achieved the best performance on the 3/6 tasks in the [CUGE benchmark](cuge.baai.ac.cn), outperforming those baselines (CPM2 with 11B parameters and Yuan 1.0 with 245B parameters) that tune all parameters.
 
 - **Economical**: [BMCook](https://github.com/OpenBMB/BMCook) & [BMInf](https://github.com/OpenBMB/BMInf) enable us to drive CPM-Ant with limited computing resources. Based on BMInf, we can efficiently perform big model inference using a single GPU (even a consumer-level GPU like GTX 1060) instead of computing clusters. To make the deployment of CPM-Ant more economical, we use BMCook to further compress the original 10B CPM-Ant into multiple versions. These compressed checkpoints (7B, 3B, 1B, 300M) can meet the requirements of various low-resource scenarios.
+
+- **Easy-to-Use**:  For both the original 10B model and its compressed versions, they can be loaded and run with only a few lines of code. We will integrate CPM-Ant into [ModelCenter](https://github.com/OpenBMB/ModelCenter) soon, making further development on our model easy.
 
 - **Egalitarian**: The training process of CPM-Ant is completely open. We have released all code, log files, and final checkpoints. All these files are publicly available. CPM-Ant also adopts an open license that allows commercial use.
 
@@ -30,7 +35,7 @@ $ pip install -r requirements.txt
 
 ## Model Checkpoints
 
-We release all checkpoints of CPM-Ant, including 10B model and its compressed versions. In particular, with the help of [BMCook](https://github.com/OpenBMB/BMCook), we use task-agnostic structured pruning on attention layers and feedforward layers to compress CPM-Ant. The configuration of each model, i.e., the number of remaining attention and feedforward layers, and the dimension of hidden states, is also listed below:
+We release all checkpoints of CPM-Ant, including 10B model and its compressed versions.
 
 | Model | # Attn. Layers | # FFN Layers | Hidden Dim | Download |
 |:-:|:-:|:-:|:-:|:-:|
@@ -40,14 +45,9 @@ We release all checkpoints of CPM-Ant, including 10B model and its compressed ve
 | CPM-Ant-1B | 25 | 21 | 2048 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-1b/cpm_live_1b.zip) |
 | CPM-Ant-300M | 25 | 21 | 512 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-300m/cpm_live_300m.zip) |
 
-Here is the relative performance of our compressed models:
+## Model Compression
 
-| Model | CPM-Ant-10B | CPM-Ant-7B | CPM-Ant-3B | CPM-Ant-1B | CPM-Ant-300M |
-|-|:-:|:-:|:-:|:-:|:-:|
-| Loss | 2.420 | 2.510 | 2.603 | 2.759 | 2.998 |
-| Relative Performance | - | 96.3% | 92.4% | 86.0% | 76.2% |
-
-If you are interested in how we compress CPM-Ant, please check our guidelines in [BMCook](https://github.com/OpenBMB/BMCook/tree/main/cpm_live_example)!
+With the help of [BMCook](https://github.com/OpenBMB/BMCook), we use task-agnostic structured pruning on attention layers and feedforward layers to compress CPM-Ant. We list the configuration of each model in the above table, i.e., the number of *remaining* attention and feedforward layers, and the dimension of hidden states. If you are interested in how we compress CPM-Ant, please check our [guidelines](https://github.com/OpenBMB/BMCook/tree/main/cpm_live_example)!
 
 ## Usage
 
@@ -55,20 +55,9 @@ If you are interested in how we compress CPM-Ant, please check our guidelines in
 
 If you want to adapt CPM-Ant to your own tasks, we recommend using parameter-efficient tuning (a.k.a., *delta tuning*). With the help of [OpenDelta](https://github.com/thunlp/OpenDelta), we can conduct delta tuning without modifying the code of the original model.
 
-First, we need to download a checkpoint of CPM-Ant and load it.
+#### 1. Install OpenDelta
 
-```python
-from cpm_live.models import CPMAnt, CPMAntConfig
-import bmtrain as bmt
-
-bmt.init_distributed(seed=0)
-config = CPMAntConfig.from_json_file("YOUR_CONFIG_PATH/config/cpm-ant-10b.json")
-model = CPMAnt(config=config)
-ckpt_path = "YOUR_CKPT_PATH/cpm_live_48_4096_checkpoint-228000.pt"
-bmt.load(model, ckpt_path)
-```
-
-Then, install OpenDelta from source. Note that we use the `with_bmtrain` branch, which enables us to conduct *distributed* delta tuning on multiple computing nodes.
+We install OpenDelta from source. Note that we use the `with_bmtrain` branch, which enables us to conduct *distributed* delta tuning on multiple computing nodes.
 
 ```shell
 $ git clone -b with_bmtrain --single-branch https://github.com/thunlp/OpenDelta.git
@@ -76,7 +65,28 @@ $ cd OpenDelta
 $ python setup.py install
 ```
 
-Finally, we can insert a delta model (e.g. LoRA) into CPM-Ant with three lines of code:
+#### 2. Load the model
+
+We need to download a checkpoint of CPM-Ant and load it.
+
+```python
+from cpm_live.models import CPMAnt, CPMAntConfig
+import bmtrain as bmt
+
+bmt.init_distributed(seed=0)
+config = CPMAntConfig.from_json_file("YOUR_PATH/cpm-ant-10b.json")
+ckpt_path = "YOUR_PATH/cpm-ant-10b.pt"
+# You can load the compressed models in the same way! 
+# config = CPMAntConfig.from_json_file("YOUR_PATH/cpm-ant-3b.json")
+# ckpt_path = "YOUR_PATH/cpm-ant-3b.pt"
+
+model = CPMAnt(config=config)
+bmt.load(model, ckpt_path)
+```
+
+#### 3. Insert a delta model
+
+Using Opendelta, we can insert a delta model (e.g. LoRA) into CPM-Ant with three lines of code:
 
 ```python
 from opendelta import LoraModel
@@ -86,7 +96,40 @@ delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
 delta_model.log()
 ```
 
-Now, do anything you want with delta tuning! More examples are coming soon!
+#### 4. Feed your data
+
+Here, we provide an example code on adapting CPM-Ant to the summarization task. We choose the soft prompt corresponding to the `lm` task and organize the input data as follows:
+
+```python
+from cpm_live.tokenizers import CPMAntTokenizer
+import numpy as np
+
+input_text = "我今天去了学校"
+target_text = "去学校"
+
+tokenizer = CPMAntTokenizer()
+prompt_length = config.prompt_length
+task_id = 1  # lm task
+
+# convert input and target text to model input
+prompt_ids = [x + prompt_length * task_id for x in range(prompt_length)]
+text_ids = [tokenizer.bos_id] + tokenizer.encode(input_text + "[摘要]")
+target_ids =  tokenizer.encode(target_text) + [tokenizer.eos_id]
+
+input_ids = prompt_ids + text_ids + target_ids
+length = len(input_ids)
+position = list(range(length))
+span = [0] * length
+context = [True] * (length - len(target_ids)) + [False] * len(target_ids)
+segment = [0] * prompt_length + [2] * (length - prompt_length)
+
+target = np.full(length, -100, dtype=np.int32)
+target[:-1] = np.where(context[1:], -100, input_ids[1:])
+```
+
+Now, convert these ids to tensors and feed them to the model for training! You can refer to [pretrain_cpm_ant.py](https://github.com/OpenBMB/CPM-Live/blob/master/cpm-live/pretrain_cpm_ant.py) for more details.
+
+More examples on real-world datasets are coming soon!
 
 ### Text Generation
 
@@ -109,3 +152,5 @@ Assuming that you have a GPU with 8G memory, you can run the text generation scr
 ```shell
 $ python text_generation.py --use-bminf --memory-limit 4
 ```
+
+Note that `memory-limit` should be less than total GPU memory, as there are some intermediate computation results needed to be stored.
