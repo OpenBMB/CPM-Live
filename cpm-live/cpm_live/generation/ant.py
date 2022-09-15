@@ -5,6 +5,7 @@ from .utils import BeamHypotheses, repetition_penalty, pad, top_k_top_p_filterin
 
 class CPMAntGeneration:
     def __init__(self, model, tokenizer, prompt_length=32):
+        model.eval()
         self.model = model
         self.tokenizer = tokenizer
         self.prompt_length = prompt_length
@@ -38,8 +39,8 @@ class CPMAntGeneration:
 
     def generate(self, text_list, **kwargs):
         model_inputs = self._process_texts(text_list)
-
-        result_ids = self._decode(model_inputs, **kwargs)
+        with torch.inference_mode():
+            result_ids = self._decode(model_inputs, **kwargs)
 
         result_text = list(map(self.tokenizer.decode, result_ids))
         return result_text
@@ -160,6 +161,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
             logits = logits[:, -1, :]
 
             if i == 0:
+                logits[:, self.tokenizer.eos_id] = -float("inf")
                 logits[:, self.tokenizer.newline_id] = -float("inf")
 
             repetition_penalty(
@@ -334,6 +336,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
             logits = logits[:, -1, :]
 
             if i == 0:
+                logits[:, self.tokenizer.eos_id] = -float("inf")
                 logits[:, self.tokenizer.newline_id] = -float("inf")
 
             repetition_penalty(
