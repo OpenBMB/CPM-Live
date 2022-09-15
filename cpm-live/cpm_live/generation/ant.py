@@ -53,7 +53,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
         self,
         model_inputs,
         beam_size=3,
-        generate_length=100,
+        max_length=100,
         repetition_coefficient=1.0,
         repetition_window=None,
     ):
@@ -67,7 +67,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
         """  # noqa: E501
         # generate_length + 1 for EOS token
-        generate_length += 1
+        max_length += 1
 
         # expand dimmension
         batch_size = model_inputs["input"].size(0)
@@ -124,13 +124,13 @@ class CPMAntBeamSearch(CPMAntGeneration):
 
         # generated hypotheses
         generated_hyps = [
-            BeamHypotheses(beam_size, generate_length, length_penalty=1, early_stopping=False)
+            BeamHypotheses(beam_size, max_length, length_penalty=1, early_stopping=False)
             for _ in range(batch_size)
         ]
 
         pred_start_index = input.size(-1)
         past_key_values = None
-        for i in range(generate_length + 1):
+        for i in range(max_length + 1):
             if i == 0:
                 logits, _, past_key_values = self.model.inference(
                     input=input,
@@ -209,7 +209,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
                     word_id = idx % scores.size(-1)
 
                     # end of sentence, or next word
-                    if word_id == self.tokenizer.eos_id or i == generate_length:
+                    if word_id == self.tokenizer.eos_id or i == max_length:
                         generated_hyps[sent_id].add(
                             input[sent_id * beam_size + beam_id, pred_start_index:]
                             .clone()
@@ -225,14 +225,14 @@ class CPMAntBeamSearch(CPMAntGeneration):
                         break
 
                 # update next beam content
-                assert len(next_sent_beam) == 0 if i == generate_length else beam_size
+                assert len(next_sent_beam) == 0 if i == max_length else beam_size
                 if len(next_sent_beam) == 0:
                     next_sent_beam = [(0, self.tokenizer.pad_id, 0)] * beam_size  # pad the batch
                 next_batch_beam.extend(next_sent_beam)
                 assert len(next_batch_beam) == beam_size * (sent_id + 1)
 
             # we have reached the last step
-            if i == generate_length:
+            if i == max_length:
                 break
 
             # sanity check / prepare next batch
@@ -276,7 +276,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
     def _decode(
         self,
         model_inputs,
-        generate_length=100,
+        max_length=100,
         top_k=0,
         top_p=0.9,
         temperature=0.9,
@@ -295,7 +295,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
         """  # noqa: E501
         # generate_length + 1 for EOS token
-        generate_length += 1
+        max_length += 1
 
         input = model_inputs["input"]
         length = model_inputs["length"]
@@ -309,7 +309,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
         past_key_values = None
         done = [False for _ in range(batch_size)]
         results = [None for _ in range(batch_size)]
-        for i in range(generate_length):
+        for i in range(max_length):
             if i == 0:
                 logits, _, past_key_values = self.model.inference(
                     input=input,
@@ -355,7 +355,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
 
             for idx in range(batch_size):
                 if not done[idx] and (
-                    next_token[idx].item() == self.tokenizer.eos_id or i == generate_length - 1
+                    next_token[idx].item() == self.tokenizer.eos_id or i == max_length - 1
                 ):
                     done[idx] = True
                     results[idx] = input[idx, pred_start_index:].clone().cpu().tolist()  # type: ignore # noqa: E501
