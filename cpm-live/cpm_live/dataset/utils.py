@@ -102,7 +102,11 @@ def shuffle_dataset(
                 data_in_bucket = []
                 while True:
                     try:
-                        len_data = struct.unpack("I", fp.read(4))[0]
+                        raw_data = fp.read(4)
+                        if len(raw_data) == 0:
+                            # EOF
+                            break
+                        len_data = struct.unpack("I", raw_data)[0]
                         data_in_bucket.append(fp.read(len_data))
                     except EOFError:
                         break

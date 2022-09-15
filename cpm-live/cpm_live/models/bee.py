@@ -91,15 +91,15 @@ class CPMBee(bmt.DistributedModule):
 
     def forward(
         self,
-        input: torch.Tensor,  # (batch, seqlen) long
-        length: torch.Tensor,  # (batch) long
+        input: torch.Tensor,  # (batch, seqlen) int32
+        length: torch.Tensor,  # (batch) int32
         context: torch.Tensor,  # (batch, seqlen) bool
-        sample_idx: torch.Tensor,  # (batch, seq_len) long
-        num_segments: torch.Tensor,  # (batch, seq_len) long
-        segment: torch.Tensor,  # (batch, seqlen) long
-        segment_rel_offset: torch.Tensor,  # (batch, seq_len) long
-        segment_rel: torch.Tensor,  # (batch, num_segment_bucket) long
-        span: torch.Tensor,  # (batch, seqlen) long
+        sample_idx: torch.Tensor,  # (batch, seq_len) int32
+        num_segments: torch.Tensor,  # (batch, seq_len) int32
+        segment: torch.Tensor,  # (batch, seqlen) int32
+        segment_rel_offset: torch.Tensor,  # (batch, seq_len) int32
+        segment_rel: torch.Tensor,  # (batch, num_segment_bucket) int32
+        span: torch.Tensor,  # (batch, seqlen) int32
     ):
         batch = input.size(0)
         seqlen = input.size(1)
@@ -122,7 +122,7 @@ class CPMBee(bmt.DistributedModule):
             segment_bucket = torch.gather(
                 input=segment_rel,
                 dim=1,
-                index=segment_rel_2d,
+                index=segment_rel_2d.long(),
             ).view(batch, seqlen, seqlen)
 
             segment_bucket.masked_fill_(

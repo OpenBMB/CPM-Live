@@ -181,7 +181,7 @@ class BucketPositionBias(bmt.DistributedModule):
             )
             relative_position_bucket = torch.where(
                 rel_buckets == 0,
-                inner_segment_bucket[None, :, :],
+                inner_segment_bucket,
                 relative_position_bucket,
             )
             # (batch, len_q, len_k)

@@ -23,12 +23,12 @@ import distutils.version  # noqa: F401
 from torch.utils.tensorboard import SummaryWriter
 
 from cpm_live.models import CPMBee, CPMBeeConfig
-from cpm_live.tokenizers import CPMAntTokenizer
+from cpm_live.tokenizers import CPMBeeTokenizer
 from training_tasks.bee import MixedDataset
 
 
 def get_tokenizer(args):
-    tokenizer = CPMAntTokenizer()
+    tokenizer = CPMBeeTokenizer()
     return tokenizer
 
 
@@ -135,23 +135,23 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
         for iteration, data in enumerate(dataloader):
 
             iteration = iteration + start_step + 1
-            assert len(data["ctx"]) == args.batch_size
-            input_ids = torch.from_numpy(data["inputs"]).cuda().long()
-            input_length = torch.from_numpy(data["length"]).cuda().long()
+            assert data["inputs"].shape[0] == args.batch_size
+            input_ids = torch.from_numpy(data["inputs"]).cuda().to(torch.int32)
+            input_length = torch.from_numpy(data["length"]).cuda().to(torch.int32)
             input_context = torch.from_numpy(data["context"]).cuda().bool()
-            input_sample_ids = torch.from_numpy(data["sample_ids"]).cuda().long()
-            input_num_segments = torch.from_numpy(data["num_segments"]).cuda().long()
-            input_segment_ids = torch.from_numpy(data["segment_ids"]).cuda().long()
-            input_segment_rel_offset = torch.from_numpy(data["segment_rel_offset"]).cuda().long()
-            input_segment_rel = torch.from_numpy(data["segment_rel"]).cuda().long()
-            input_span = torch.from_numpy(data["spans"]).cuda().long()
-            targets = torch.from_numpy(data["target"]).cuda().long()
-            task_ids = torch.from_numpy(data["task_ids"]).cuda().long()
+            input_sample_ids = torch.from_numpy(data["sample_ids"]).cuda().to(torch.int32)
+            input_num_segments = torch.from_numpy(data["num_segments"]).cuda().to(torch.int32)
+            input_segment_ids = torch.from_numpy(data["segment_ids"]).cuda().to(torch.int32)
+            input_segment_rel_offset = torch.from_numpy(data["segment_rel_offset"]).cuda().to(torch.int32)
+            input_segment_rel = torch.from_numpy(data["segment_rel"]).cuda().to(torch.int32)
+            input_span = torch.from_numpy(data["spans"]).cuda().to(torch.int32)
+            targets = torch.from_numpy(data["target"]).cuda().to(torch.int32)
+            task_ids = torch.from_numpy(data["task_ids"]).cuda().to(torch.int32)
             task_names = data["task_names"]
 
             # ===========
             optimizer.zero_grad()
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             mem_usage = {}
             tim_usage = {}
             mem_usage, tim_usage = add_mem_time("init", mem_usage, tim_usage)
@@ -195,8 +195,8 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 )
                 targets_tmp = targets.expand(task_num, -1, -1)
 
-                task = torch.arange(task_num, dtype=torch.long, device="cuda")[:, None, None]
-                targets_tmp = torch.where(task_ids == task, targets_tmp, -100)
+                task = torch.arange(task_num, dtype=torch.int32, device="cuda")[:, None, None]
+                targets_tmp = torch.where(task_ids == task, targets_tmp, torch.scalar_tensor(-100, dtype=torch.int32, device="cuda"))
 
                 task_loss_map: Dict[str, float] = {}
                 for i in range(task_num):
