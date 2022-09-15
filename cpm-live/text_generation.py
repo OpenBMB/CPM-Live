@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     config = CPMAntConfig.from_json_file("config/cpm-ant-10b.json")
     model = CPMAntTorch(config=config)
-    ckpt_path = "/bjzhyai03/zz/cpmlive_ckpt/cpm_live_48_4096_checkpoint-228000.pt"
+    ckpt_path = "YOU_CKPT_PATH/cpm_live_48_4096_checkpoint-228000.pt"
 
     model.load_state_dict(torch.load(ckpt_path))
     model.cuda()
