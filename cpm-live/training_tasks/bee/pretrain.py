@@ -27,7 +27,6 @@ from numpy._typing import NDArray
 import torch
 import bmtrain as bmt
 
-
 class _MixedDatasetConfig(TypedDict):
     weight: float
     path: str
@@ -165,7 +164,7 @@ class _MixedDatasetBatchPacker:
 
     def data_to_id(self, data: Any):
         root: _DictTree = {
-            "value": "<root>",
+            "value": "<d>",
             "children": [],
             "depth": 0,
             "segment_id": 0,
@@ -267,13 +266,13 @@ class _MixedDatasetBatchPacker:
             inp = self.apply_transform(inp, transform)
 
             input_ids, context, segment_ids, segment_rel, n_segments = self.data_to_id(inp)
+            if input_ids.shape[0] > self._max_length:
+                # too long
+                continue
             input_ids = input_ids[: self._max_length]
             context = context[: self._max_length]
             segment_ids = segment_ids[: self._max_length]
-
-            if (context == 0).any():
-                # some values are not in context
-                break
+            break
 
         sample_ids = np.zeros(input_ids.shape, dtype=np.int32)
         segment_rel_offset = np.zeros(input_ids.shape, dtype=np.int32)

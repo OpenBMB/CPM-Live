@@ -1,5 +1,5 @@
 from training_tasks.bee import MixedDataset
-from cpm_live.tokenizers import CPMAntTokenizer
+from cpm_live.tokenizers import CPMBeeTokenizer
 import os
 import torch
 import bmtrain as bmt
@@ -7,8 +7,8 @@ from tqdm import tqdm
 
 
 def main():
-    tokenizer = CPMAntTokenizer()
-    dataloader = MixedDataset("datasets.json", 16, 512, tokenizer, [0.5, 0.25, 0.25])
+    tokenizer = CPMBeeTokenizer()
+    dataloader = MixedDataset("datasets.json", 16, 2048, tokenizer, [0.5, 0.25, 0.25])
     if os.path.exists("data.pt"):
         # load dataset states if exists
         dataset_states = torch.load("data.pt")
@@ -91,10 +91,11 @@ def main():
                 )
             # print("mask: ", attention_mask)
             # print("bucket: ", segment_bucket)
-            from IPython import embed
+            # print(segment_rel.size(), sample_ids.max() + 1)
+            # from IPython import embed
 
-            embed()
-            break
+            # embed()
+            # break
     finally:
         dataloader.close()
 
