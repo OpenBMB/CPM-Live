@@ -24,7 +24,8 @@ def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
 
     reader = io.TextIOWrapper(fp, encoding="utf-8")
     for token in reader.readlines():
-        token = token.strip()
+        if token[-1] == "\n":
+            token = token[:-1]
         if len(token) == 0:
             continue
         vocab[token] = len(vocab)
@@ -61,7 +62,7 @@ class CPMBeeTokenizer(object):
         self.line_token = "\n"
         self.space_token = " "
 
-        self.encoder = load_vocab(pkg_resources.resource_stream("cpm_live", "vocabs/ant.txt"))
+        self.encoder = load_vocab(pkg_resources.resource_stream("cpm_live", "vocabs/bee.txt"))
         self.decoder = {v: k for k, v in self.encoder.items()}
 
         self.encoder[self.line_token] = self.encoder["</n>"]
