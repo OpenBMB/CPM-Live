@@ -1,13 +1,26 @@
 # coding=utf-8
-import jieba
+# Copyright 2022 The OpenBMB team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import pkg_resources
 import io
-from typing import IO
+from typing import IO, Dict, List, Tuple
 
 
-def load_vocab(fp: IO[bytes]):
+def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
     """Loads a vocabulary file into a dictionary."""
-    vocab = {}
+    vocab : Dict[str, int] = {}
 
     reader = io.TextIOWrapper(fp, encoding="utf-8")
     for token in reader.readlines():
@@ -17,83 +30,55 @@ def load_vocab(fp: IO[bytes]):
         vocab[token] = len(vocab)
     return vocab
 
-
-class WordpieceTokenizer(object):
-    def __init__(self, vocab, unk_token="<unk>", max_input_chars_per_word=200):
-        self.vocab = vocab
-        self.unk_token = unk_token
-        self.max_input_chars_per_word = max_input_chars_per_word
-
-    def tokenize(self, token):
-        chars = list(token)
-        if len(chars) > self.max_input_chars_per_word:
-            return [self.unk_token]
-
-        start = 0
-        sub_tokens = []
-        while start < len(chars):
-            end = len(chars)
-            cur_substr = None
-            while start < end:
-                substr = "".join(chars[start:end])
-                if substr in self.vocab:
-                    cur_substr = substr
-                    break
-                end -= 1
-            if cur_substr is None:
-                sub_tokens.append(self.unk_token)
-                start += 1
-            else:
-                sub_tokens.append(cur_substr)
-                start = end
-
-        return sub_tokens
-
+class Token(object):
+    def __init__(
+            self,
+            token : str,
+            start : int,
+            is_unk : bool,
+            is_special : bool
+        ):
+        self.token = token
+        self.start = start
+        self.is_unk = is_unk
+        self.is_special = is_special
 
 class CPMBeeTokenizer(object):
     def __init__(
         self,
-        bod_token="<d>",
-        eod_token="</d>",
-        bos_token="<s>",
-        eos_token="</s>",
-        pad_token="<pad>",
-        unk_token="<unk>",
-        line_token="</n>",
-        space_token="</_>",
     ):
 
-        self.bod_token = bod_token
-        self.eod_token = eod_token
-        self.bos_token = bos_token
-        self.eos_token = eos_token
-        self.pad_token = pad_token
-        self.unk_token = unk_token
-        self.line_token = line_token
-        self.space_token = space_token
+        self.bos_token = "<s>"
+        self.eos_token = "</s>"
+        self.line_token = "</n>"
+        self.space_token = "</_>"
 
         self.encoder = load_vocab(pkg_resources.resource_stream("cpm_live", "vocabs/ant.txt"))
-        self.encoder[" "] = self.encoder[space_token]
-        self.encoder["\n"] = self.encoder[line_token]
-
-        del self.encoder[self.space_token]
-        del self.encoder[self.line_token]
-
         self.decoder = {v: k for k, v in self.encoder.items()}
 
-        self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.encoder, unk_token=self.unk_token)
+        self.encoder["\n"] = self.encoder[self.line_token]
+        self.encoder[" "] = self.encoder[self.space_token]
+
+        self._special_tokens = {
+            k: v
+            for k, v in self.encoder.items()
+            if k.startswith("<") and k.endswith(">")
+        }
+
+        self._max_word_len = max([len(x) for x in self.encoder.keys()])
+
+    def get_piece(self, text : str) -> str:
+        text = text[:self._max_word_len]
+        len_text = len(text)
+        for i in range(len(text)):
+            sub = text[:len_text-i]
+            if (sub in self.encoder) and (sub not in self._special_tokens):
+                return sub
+        return text[0]
 
     @property
     def vocab_size(self):
         return len(self.encoder)
-
-    @property
-    def bod_id(self):
-        return self.encoder[self.bod_token]
-
-    @property
-    def eod_id(self):
-        return self.encoder[self.eod_token]
 
     @property
     def eos_id(self):
@@ -103,87 +88,124 @@ class CPMBeeTokenizer(object):
     def bos_id(self):
         return self.encoder[self.bos_token]
 
-    @property
-    def pad_id(self):
-        return self.encoder[self.pad_token]
-
-    @property
-    def unk_id(self):
-        return self.encoder[self.unk_token]
-
     def __len__(self):
         return len(self.encoder)
 
-    def tokenize(self, text, special_tokens : bool = True):
-        """Tokenize a string."""
-        output_tokens = []
-        if not special_tokens:
-            for x in jieba.cut(text, cut_all=False):
-                output_tokens.extend(self.wordpiece_tokenizer.tokenize(x))
-            return output_tokens
-        else:
-            sentence_split = [""]
-            is_escape = False
-            is_special_token = False
-            for i, c in enumerate(text):
-                if is_special_token:
-                    if c == "<":
-                        raise ValueError("Invalid special token at pos {}".format(i))
-                    elif c == ">":
-                        # end of special token
-                        sentence_split[-1] += c
-                        is_special_token = False
-                        sentence_split.append("")
-                    else:
-                        sentence_split[-1] += c
+    def tokenize(self, text : str) -> List[Token]:
+        output_tokens : List[Token] = []
+        
+        sentence_split = [""]
+        is_escape = False
+        is_special_token = False
+        for i, c in enumerate(text):
+            if is_special_token:
+                if c == "<":
+                    raise ValueError("Invalid special token at pos {}".format(i))
+                elif c == ">":
+                    # end of special token
+                    sentence_split[-1] += c
+                    is_special_token = False
+                    sentence_split.append("")
                 else:
-                    if c == "<":
-                        if is_escape:
-                            # case: <<
-                            sentence_split[-1] += c
-                            is_escape = False
-                        else:
-                            # case: x<
-                            is_escape = True
+                    sentence_split[-1] += c
+            else:
+                if c == "<":
+                    if is_escape:
+                        # case: <<
+                        sentence_split[-1] += c
+                        is_escape = False
                     else:
-                        if is_escape:
-                            # case <x
-                            is_special_token = True
-                            is_escape = False
-                            sentence_split.append("<" + c)
-                        else:
-                            # case xx
-                            sentence_split[-1] += c
-            if is_escape or is_special_token:
-                raise ValueError("Unexpected end of text `{}`".format(text))
-            for i, part in enumerate(sentence_split):
-                if (i & 1) == 1:
-                    # special token
-                    output_tokens.append(part)
+                        # case: x<
+                        is_escape = True
                 else:
-                    for x in jieba.cut(part, cut_all=False):
-                        output_tokens.extend(self.wordpiece_tokenizer.tokenize(x))
+                    if is_escape:
+                        # case <x
+                        is_special_token = True
+                        is_escape = False
+                        sentence_split.append("<" + c)
+                    else:
+                        # case xx
+                        sentence_split[-1] += c
+        if is_escape or is_special_token:
+            raise ValueError("Unexpected end of text `{}`".format(text))
+        
+        part_pos = 0
+        for i, part in enumerate(sentence_split):
+            if (i & 1) == 1:
+                # special token
+                output_tokens.append(Token(
+                    part,
+                    part_pos,
+                    False,
+                    True
+                ))
+            else:
+                part_st = 0
+                last_unk = None
+                while part_st < len(part):
+                    piece = self.get_piece(part[part_st:])
+                    if piece not in self.encoder:
+                        if last_unk is None:
+                            last_unk = piece
+                        else:
+                            last_unk += piece
+                    else:
+                        if last_unk is None:
+                            output_tokens.append(Token(
+                                piece,
+                                part_st + part_pos,
+                                False,
+                                False
+                            ))
+                        else:
+                            output_tokens.append(Token(
+                                last_unk,
+                                part_st + part_pos - len(last_unk),
+                                True,
+                                False
+                            ))
+                            output_tokens.append(Token(
+                                piece,
+                                part_st + part_pos,
+                                False,
+                                False
+                            ))
+                            last_unk = None
+                    part_st += len(piece)
+            part_pos += len(part)
         return output_tokens
 
     @staticmethod
-    def escape(text : str):
+    def escape(text : str) -> str:
         return text.replace("<", "<<")
 
-    def encode(self, text):
-        """Encode a string into ids."""
-        return [self.encoder[x] for x in self.tokenize(text)]
+    def encode(self, text : str) -> Tuple[List[int], Dict[int, str]]:
+        ext_table_rev : Dict[str, int] = {}
+        ext_table : Dict[int, str] = {}
+        ret = []
+        for x in self.tokenize(text):
+            if x.is_unk or (x.is_special and (x.token not in self.encoder)):
+                if x.token not in ext_table_rev:
+                    ext_table_rev[x.token] = len(ext_table_rev) + self.vocab_size
+                    ext_table[ext_table_rev[x.token]] = x.token
+                ret.append(ext_table_rev[x.token])
+            elif x.token in self.encoder:
+                ret.append(self.encoder[x.token])
+            else:
+                raise ValueError("Unknown token `{}` at pos {}".format(x.token, x.start))
 
-    def decode(self, tokens):
+        return ret, ext_table
+
+    def decode(self, tokens : List[int], ext_table : Dict[int, str]):
         """Decode ids into a string."""
-        tokens = [i for i in tokens if i >= 0]
-        text = "".join([self.decoder[x] for x in tokens])
-        return text
+        # tokens = [i for i in tokens if i >= 0]
+        # tokens : List[int] = []
 
-    def check(self, token):
-        return token in self.encoder
-
-    def convert_tokens_to_ids(self, tokens):
-        return [self.encoder.get(x, self.encoder[self.unk_token]) for x in tokens]
-
-    def convert_ids_to_tokens(self, ids):
-        return [self.decoder[x] if x >= 0 else self.unk_token for x in ids]
+        ret = []
+        for token in tokens:
+            if token in ext_table:
+                ret.append(ext_table[token])
+            else:
+                if token >= 0:
+                    ret.append(self.decoder[token])
+        return "".join(ret)
