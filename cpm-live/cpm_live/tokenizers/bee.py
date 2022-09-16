@@ -42,6 +42,14 @@ class Token(object):
         self.start = start
         self.is_unk = is_unk
         self.is_special = is_special
+    
+    def __str__(self):
+        return "Token(token={}, start={}, is_unk={}, is_special={})".format(
+            self.token, self.start, self.is_unk, self.is_special
+        )
+    
+    def __repr__(self):
+        return self.__str__()
 
 class CPMBeeTokenizer(object):
     def __init__(
@@ -50,14 +58,16 @@ class CPMBeeTokenizer(object):
 
         self.bos_token = "<s>"
         self.eos_token = "</s>"
-        self.line_token = "</n>"
-        self.space_token = "</_>"
+        self.line_token = "\n"
+        self.space_token = " "
 
         self.encoder = load_vocab(pkg_resources.resource_stream("cpm_live", "vocabs/ant.txt"))
         self.decoder = {v: k for k, v in self.encoder.items()}
 
-        self.encoder["\n"] = self.encoder[self.line_token]
-        self.encoder[" "] = self.encoder[self.space_token]
+        self.encoder[self.line_token] = self.encoder["</n>"]
+        self.encoder[self.space_token] = self.encoder["</_>"]
+        del self.encoder[self.line_token]
+        del self.encoder[self.space_token]
 
         self._special_tokens = {
             k: v
@@ -172,6 +182,14 @@ class CPMBeeTokenizer(object):
                             ))
                             last_unk = None
                     part_st += len(piece)
+                if last_unk is not None:
+                    # part end with UNK
+                    output_tokens.append(Token(
+                        last_unk,
+                        part_st + part_pos - len(last_unk),
+                        True,
+                        False
+                    ))
             part_pos += len(part)
         return output_tokens
 
