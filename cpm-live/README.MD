@@ -39,11 +39,11 @@ We release all checkpoints of CPM-Ant, including 10B model and its compressed ve
 
 | Model | # Attn. Layers | # FFN Layers | Hidden Dim | Download |
 |:-:|:-:|:-:|:-:|:-:|
-| CPM-Ant-10B | 48 | 48 | 4096 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-10b/cpm_live_10B.zip) |
-| CPM-Ant-7B | 37 | 32 | 4096 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-7b/cpm_live_7b.zip) |
-| CPM-Ant-3B | 37 | 32 | 2560 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-3b/cpm_live_3b.zip) |
-| CPM-Ant-1B | 25 | 21 | 2048 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-1b/cpm_live_1b.zip) |
-| CPM-Ant-300M | 25 | 21 | 512 | [link](http://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-300m/cpm_live_300m.zip) |
+| CPM-Ant-10B | 48 | 48 | 4096 | [link](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-10b/cpm_live_10B.zip) |
+| CPM-Ant-7B | 37 | 32 | 4096 | [link](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-7b/cpm_live_7b.zip) |
+| CPM-Ant-3B | 37 | 32 | 2560 | [link](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-3b/cpm_live_3b.zip) |
+| CPM-Ant-1B | 25 | 21 | 2048 | [link](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-1b/cpm_live_1b.zip) |
+| CPM-Ant-300M | 25 | 21 | 512 | [link](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpmlive-300m/cpm_live_300m.zip) |
 
 ## Model Compression
 
