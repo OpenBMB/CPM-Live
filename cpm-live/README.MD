@@ -2,7 +2,7 @@
 
 <h1>CPM-Ant</h1>
 <p align="center">
-   <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://live.openbmb.org" target="_blank">Blog</a> • <a href="https://github.com/OpenBMB/CPM-Live/tree/master/cpm-live#model-checkpoints">Models</a>
+   <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://www.openbmb.org/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92" target="_blank">Blog</a> • <a href="https://github.com/OpenBMB/CPM-Live/tree/master/cpm-live#model-checkpoints">Models</a>
 </p>
 </div>
 
@@ -12,11 +12,11 @@ CPM-Ant is an open-source Chinese pre-trained language model (PLM) with 10B para
 
 - **Efficient**: [BMTrain](https://github.com/OpenBMB/BMTrain) enables us to take full advantage of distributed computing power to efficiently train big models. The training of CPM-Ant lasts 68 days and costs 430K RMB, which is much lower than the cost of existing model training practices. The greenhouse gas (GHG) emissions of training CPM-Ant are about 4872kg CO<sub>2</sub>e, while the emissions of training T5-11B are 46.7t CO<sub>2</sub>e.
 
-- **Effective**: [OpenDelta](https://github.com/thunlp/OpenDelta) enables us to adapt CPM-Ant to downstream tasks through delta tuning. In our experiments, by only tuning 6.3 million parameters, CPM-Ant has achieved the best performance on the 3/6 tasks in the [CUGE benchmark](cuge.baai.ac.cn), outperforming those baselines (CPM2 with 11B parameters and Yuan 1.0 with 245B parameters) that tune all parameters.
+- **Effective**: [OpenDelta](https://github.com/thunlp/OpenDelta) enables us to adapt CPM-Ant to downstream tasks through delta tuning. In our experiments, by only tuning 6.3 million parameters, CPM-Ant has achieved the best performance on the 3/6 tasks in the [CUGE benchmark](http://cuge.baai.ac.cn), outperforming those baselines (CPM2 with 11B parameters and Yuan 1.0 with 245B parameters) that tune all parameters.
 
 - **Economical**: [BMCook](https://github.com/OpenBMB/BMCook) & [BMInf](https://github.com/OpenBMB/BMInf) enable us to drive CPM-Ant with limited computing resources. Based on BMInf, we can efficiently perform big model inference using a single GPU (even a consumer-level GPU like GTX 1060) instead of computing clusters. To make the deployment of CPM-Ant more economical, we use BMCook to further compress the original 10B CPM-Ant into multiple versions. These compressed checkpoints (7B, 3B, 1B, 300M) can meet the requirements of various low-resource scenarios.
 
-- **Easy-to-Use**:  For both the original 10B model and its compressed versions, they can be loaded and run with only a few lines of code. We will integrate CPM-Ant into [ModelCenter](https://github.com/OpenBMB/ModelCenter) soon, making further development on our model easy.
+- **Easy-to-Use**:  For both the original 10B model and its compressed versions, they can be loaded and run with only a few lines of code. We will integrate CPM-Ant into [ModelCenter](https://github.com/OpenBMB/ModelCenter) soon, making further development on our model easier.
 
 - **Egalitarian**: The training process of CPM-Ant is completely open. We have released all code, log files, and final checkpoints. All these files are publicly available. CPM-Ant also adopts an open license that allows commercial use.
 
@@ -48,6 +48,12 @@ We release all checkpoints of CPM-Ant, including 10B model and its compressed ve
 ## Model Compression
 
 With the help of [BMCook](https://github.com/OpenBMB/BMCook), we use task-agnostic structured pruning on attention layers and feedforward layers to compress CPM-Ant. We list the configuration of each model in the above table, i.e., the number of *remaining* attention and feedforward layers, and the dimension of hidden states. If you are interested in how we compress CPM-Ant, please check our [guidelines](https://github.com/OpenBMB/BMCook/tree/main/cpm_live_example)!
+
+Here is a performance summary of all models:
+
+| Model | CPM-Ant-10B | CPM-Ant-7B | CPM-Ant-3B | CPM-Ant-1B | CPM-Ant-300M |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| Loss | 2.420 | 2.510 | 2.603 | 2.759 | 2.998 |
 
 ## Usage
 
