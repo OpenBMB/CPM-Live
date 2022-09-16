@@ -1,10 +1,12 @@
-<div align="center">
+<p align="center">
+    <br>
+    <img src="cpm-ant.png" width="800"/>
+    <br>
+<p>
 
-<h1>CPM-Ant</h1>
 <p align="center">
    <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92" target="_blank">Blog</a> • <a href="https://github.com/OpenBMB/CPM-Live/tree/master/cpm-live#model-checkpoints">Models</a>
 </p>
-</div>
 
 ## Overview
 
