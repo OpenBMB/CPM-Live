@@ -21,9 +21,9 @@ if __name__ == "__main__":
         "我们在假期去了法国的埃菲尔铁塔，",
     ]
 
-    config = CPMAntConfig.from_json_file("config/cpm-ant-10b.json")
+    config = CPMAntConfig.from_json_file("YOUR_PATH/cpm-ant-10b.json")
+    ckpt_path = "YOUR_PATH/cpm-ant-10b.pt"
     model = CPMAntTorch(config=config)
-    ckpt_path = "YOU_CKPT_PATH/cpm_live_48_4096_checkpoint-228000.pt"
 
     model.load_state_dict(torch.load(ckpt_path))
     if args.use_bminf:
