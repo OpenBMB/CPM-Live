@@ -225,5 +225,9 @@ class CPMBeeTokenizer(object):
                 ret.append(ext_table[token])
             else:
                 if token >= 0:
-                    ret.append(self.decoder[token])
+                    w = self.decoder[token]
+                    if w in self._special_tokens:
+                        ret.append(w)
+                    else:
+                        ret.append(self.escape(w))
         return "".join(ret)
