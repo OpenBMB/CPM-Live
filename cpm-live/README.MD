@@ -124,6 +124,14 @@ prompt_ids = [x + prompt_length * task_id for x in range(prompt_length)]
 text_ids = [tokenizer.bos_id] + tokenizer.encode(input_text + "[摘要]")
 target_ids =  tokenizer.encode(target_text) + [tokenizer.eos_id]
 
+# For MLM:
+#   input_ids:   p1 p2 ...  pN  x1   x2   x3 ...
+#   pos_ids:     0  1  ... N-1   N  N+1  N+2
+#   segment_ids: 0  0  ...   0   1    1    1  ...
+# For LM:
+#   input_ids:   p1 p2 ...  pN  x1   x2   x3 ...
+#   pos_ids:     0  1  ... N-1   N  N+1  N+2
+#   segment_ids: 0  0  ...   0   2    2    2  ...
 input_ids = prompt_ids + text_ids + target_ids
 length = len(input_ids)
 position = list(range(length))
