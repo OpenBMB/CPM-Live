@@ -3,11 +3,7 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 GPUS_PER_NODE=8
 
 NNODES=1
-<<<<<<< HEAD:cpm-live/scripts/pretrain_cpm_bee.sh
 MASTER_ADDR="localhost"
-=======
-MASTER_ADDR=localhost
->>>>>>> master:cpm-live/scripts/pretrain_cpm_ant.sh
 MASTER_PORT=12345
 
 OPTS=""
