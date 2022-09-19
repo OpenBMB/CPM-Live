@@ -33,9 +33,9 @@ def get_tokenizer(args):
     return tokenizer
 
 
-def get_model(args):
+def get_model(args, tokenizer : CPMBeeTokenizer):
     config = CPMBeeConfig.from_json_file(args.model_config)
-    model = CPMBee(config)
+    model = CPMBee(config, tokenizer)
     if args.load is not None:
         bmt.load(model, args.load)
     else:
@@ -72,7 +72,7 @@ def get_learning_rate_scheduler(args, optimizer):
 
 def setup_model_and_optimizer(args):
     tokenizer = get_tokenizer(args)
-    model = get_model(args)
+    model = get_model(args, tokenizer)
     bmt.synchronize()
     optimizer = get_optimizer(args, model)
     lr_scheduler = get_learning_rate_scheduler(args, optimizer)
@@ -115,12 +115,14 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
     start_step = args.start_step
 
     if bmt.rank() == 0:
+        if not os.path.exists(args.log_dir):
+            os.makedirs(args.log_dir)
         writer = SummaryWriter(log_dir=args.log_dir)
 
     global_token_pass = 0.0
     global_world_size = bmt.world_size()
     dataloader = MixedDataset(
-        "datasets.json", args.batch_size, args.max_length, tokenizer, [0.5, 0.25, 0.25], max_depth=8
+        "datasets.json", args.batch_size, args.max_length, tokenizer, max_depth=8
     )
 
     if os.path.exists(os.path.join(args.save, args.save_name + ("-%d.data.pt" % start_step))):
@@ -138,6 +140,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
             iteration = iteration + start_step + 1
             assert data["inputs"].shape[0] == args.batch_size
             input_ids = torch.from_numpy(data["inputs"]).cuda().to(torch.int32)
+            input_ids_sub = torch.from_numpy(data["inputs_sub"]).cuda().to(torch.int32)
             input_length = torch.from_numpy(data["length"]).cuda().to(torch.int32)
             input_context = torch.from_numpy(data["context"]).cuda().bool()
             input_sample_ids = torch.from_numpy(data["sample_ids"]).cuda().to(torch.int32)
@@ -160,6 +163,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
             # ===========
             logits, _ = model(
                 input_ids,
+                input_ids_sub,
                 input_length,
                 input_context,
                 input_sample_ids,
