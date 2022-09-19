@@ -277,7 +277,7 @@ class DistributedDataset:
 
     def _prepare_new_epoch(self):
         self._repeat_times += 1
-        
+
         if self._max_repeat_times is not None:
             if self._repeat_times >= self._max_repeat_times:
                 raise EOFError("End of dataset")

@@ -33,7 +33,7 @@ def get_tokenizer(args):
     return tokenizer
 
 
-def get_model(args, tokenizer : CPMBeeTokenizer):
+def get_model(args, tokenizer: CPMBeeTokenizer):
     config = CPMBeeConfig.from_json_file(args.model_config)
     model = CPMBee(config, tokenizer)
     if args.load is not None:
@@ -146,7 +146,9 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
             input_sample_ids = torch.from_numpy(data["sample_ids"]).cuda().to(torch.int32)
             input_num_segments = torch.from_numpy(data["num_segments"]).cuda().to(torch.int32)
             input_segment_ids = torch.from_numpy(data["segment_ids"]).cuda().to(torch.int32)
-            input_segment_rel_offset = torch.from_numpy(data["segment_rel_offset"]).cuda().to(torch.int32)
+            input_segment_rel_offset = (
+                torch.from_numpy(data["segment_rel_offset"]).cuda().to(torch.int32)
+            )
             input_segment_rel = torch.from_numpy(data["segment_rel"]).cuda().to(torch.int32)
             input_span = torch.from_numpy(data["spans"]).cuda().to(torch.int32)
             targets = torch.from_numpy(data["target"]).cuda().to(torch.int32)
@@ -197,25 +199,33 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 task_num = len(task_names)
                 targets_tmp = targets.expand(task_num, -1, -1)
                 task = torch.arange(task_num, dtype=torch.int32, device="cuda")[:, None, None]
-                targets_tmp = torch.where(task_ids == task, targets_tmp, torch.scalar_tensor(-100, dtype=torch.int32, device="cuda"))
+                targets_tmp = torch.where(
+                    task_ids == task,
+                    targets_tmp,
+                    torch.scalar_tensor(-100, dtype=torch.int32, device="cuda"),
+                )
 
                 task_loss_map: Dict[str, float] = {}
                 for i in range(task_num):
-                    task_loss = loss_func(logits.view(-1, logits.size(-1)), targets_tmp[i, :].view(-1))
+                    task_loss = loss_func(
+                        logits.view(-1, logits.size(-1)), targets_tmp[i, :].view(-1)
+                    )
                     # global_task_loss = float(bmt.sum_loss(task_loss).item())
                     task_loss_map[task_names[i]] = task_loss.item()
-                gatherd_task_loss_map : List[Dict[str, float]] = allgather_objects(task_loss_map)
-                
-                global_task_loss_map : Dict[str, Union[List[float], float]] = {}
+                gatherd_task_loss_map: List[Dict[str, float]] = allgather_objects(task_loss_map)
+
+                global_task_loss_map: Dict[str, Union[List[float], float]] = {}
                 for local_task_loss_map in gatherd_task_loss_map:
                     for task_name, task_loss in local_task_loss_map.items():
                         if task_name not in global_task_loss_map:
                             global_task_loss_map[task_name] = []
                         global_task_loss_map[task_name].append(task_loss)
-                
+
                 task_loss_map = {}
                 for task_name in sorted(list(global_task_loss_map.keys())):
-                    avg_loss = sum(global_task_loss_map[task_name]) / len(global_task_loss_map[task_name])
+                    avg_loss = sum(global_task_loss_map[task_name]) / len(
+                        global_task_loss_map[task_name]
+                    )
                     task_loss_map[task_name] = avg_loss
 
             local_total_rate = torch.Tensor([input_length.float().mean() / args.max_length]).cuda()

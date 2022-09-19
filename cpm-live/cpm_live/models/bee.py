@@ -60,7 +60,7 @@ class CPMBeeConfig(Config):
 
 
 class CPMBee(bmt.DistributedModule):
-    def __init__(self, config: CPMBeeConfig, tokenizer : CPMBeeTokenizer):
+    def __init__(self, config: CPMBeeConfig, tokenizer: CPMBeeTokenizer):
 
         super().__init__()
 
@@ -90,7 +90,7 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
-        
+
         self.unk_id = tokenizer.unk_id
 
     def forward(
@@ -165,21 +165,21 @@ class CPMBee(bmt.DistributedModule):
 
         # processing unk table
         with torch.no_grad():
-            num_unks = max(int(torch.masked_fill(
-                input_sub,
-                input != self.unk_id,
-                0
-            ).max().item()), 1)
+            num_unks = max(
+                int(torch.masked_fill(input_sub, input != self.unk_id, 0).max().item()), 1
+            )
 
         hidden_states = self.input_embedding(input, input_sub)
         position_bias = self.position_bias(position, position, segment_bucket)
 
         hidden_states = self.encoder(hidden_states, attention_mask, position_bias)
 
-        ext_table_ids = torch.tensor([self.unk_id], dtype=torch.int32, device="cuda").expand(num_unks)
+        ext_table_ids = torch.tensor([self.unk_id], dtype=torch.int32, device="cuda").expand(
+            num_unks
+        )
         ext_table_sub = torch.arange(num_unks, dtype=torch.int32, device="cuda")
         ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
 
         logits = self.input_embedding.projection(hidden_states, ext_table)
-        logits[..., self.unk_id] = -10000   # mask original unk
+        logits[..., self.unk_id] = -10000  # mask original unk
         return logits, hidden_states

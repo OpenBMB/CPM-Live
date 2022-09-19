@@ -20,7 +20,7 @@ from typing import IO, Dict, List, Optional, Tuple
 
 def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
     """Loads a vocabulary file into a dictionary."""
-    vocab : Dict[str, int] = {}
+    vocab: Dict[str, int] = {}
 
     reader = io.TextIOWrapper(fp, encoding="utf-8")
     for token in reader.readlines():
@@ -31,26 +31,22 @@ def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
         vocab[token] = len(vocab)
     return vocab
 
+
 class Token(object):
-    def __init__(
-            self,
-            token : str,
-            start : int,
-            is_unk : bool,
-            is_special : bool
-        ):
+    def __init__(self, token: str, start: int, is_unk: bool, is_special: bool):
         self.token = token
         self.start = start
         self.is_unk = is_unk
         self.is_special = is_special
-    
+
     def __str__(self):
         return "Token(token={}, start={}, is_unk={}, is_special={})".format(
             self.token, self.start, self.is_unk, self.is_special
         )
-    
+
     def __repr__(self):
         return self.__str__()
+
 
 class CPMBeeTokenizer(object):
     def __init__(
@@ -71,18 +67,16 @@ class CPMBeeTokenizer(object):
 
         self.decoder = {v: k for k, v in self.encoder.items()}
         self._special_tokens = {
-            k: v
-            for k, v in self.encoder.items()
-            if k.startswith("<") and k.endswith(">")
+            k: v for k, v in self.encoder.items() if k.startswith("<") and k.endswith(">")
         }
 
         self._max_word_len = max([len(x) for x in self.encoder.keys()])
 
-    def get_piece(self, text : str) -> str:
-        text = text[:self._max_word_len]
+    def get_piece(self, text: str) -> str:
+        text = text[: self._max_word_len]
         len_text = len(text)
         for i in range(len(text)):
-            sub = text[:len_text-i]
+            sub = text[: len_text - i]
             if (sub in self.encoder) and (sub not in self._special_tokens):
                 return sub
         return text[0]
@@ -102,17 +96,17 @@ class CPMBeeTokenizer(object):
     @property
     def unk_id(self):
         return self.encoder[self.unk_token]
-    
+
     @property
     def mask_id(self):
         return self.encoder[self.mask_token]
-        
+
     def __len__(self):
         return len(self.encoder)
 
-    def tokenize(self, text : str) -> List[Token]:
-        output_tokens : List[Token] = []
-        
+    def tokenize(self, text: str) -> List[Token]:
+        output_tokens: List[Token] = []
+
         sentence_split = [""]
         is_escape = False
         is_special_token = False
@@ -147,17 +141,12 @@ class CPMBeeTokenizer(object):
                         sentence_split[-1] += c
         if is_escape or is_special_token:
             raise ValueError("Unexpected end of text `{}`".format(text))
-        
+
         part_pos = 0
         for i, part in enumerate(sentence_split):
             if (i & 1) == 1:
                 # special token
-                output_tokens.append(Token(
-                    part,
-                    part_pos,
-                    False,
-                    True
-                ))
+                output_tokens.append(Token(part, part_pos, False, True))
             else:
                 part_st = 0
                 last_unk = None
@@ -170,45 +159,31 @@ class CPMBeeTokenizer(object):
                             last_unk += piece
                     else:
                         if last_unk is None:
-                            output_tokens.append(Token(
-                                piece,
-                                part_st + part_pos,
-                                False,
-                                False
-                            ))
+                            output_tokens.append(Token(piece, part_st + part_pos, False, False))
                         else:
-                            output_tokens.append(Token(
-                                last_unk,
-                                part_st + part_pos - len(last_unk),
-                                True,
-                                False
-                            ))
-                            output_tokens.append(Token(
-                                piece,
-                                part_st + part_pos,
-                                False,
-                                False
-                            ))
+                            output_tokens.append(
+                                Token(last_unk, part_st + part_pos - len(last_unk), True, False)
+                            )
+                            output_tokens.append(Token(piece, part_st + part_pos, False, False))
                             last_unk = None
                     part_st += len(piece)
                 if last_unk is not None:
                     # part end with UNK
-                    output_tokens.append(Token(
-                        last_unk,
-                        part_st + part_pos - len(last_unk),
-                        True,
-                        False
-                    ))
+                    output_tokens.append(
+                        Token(last_unk, part_st + part_pos - len(last_unk), True, False)
+                    )
             part_pos += len(part)
         return output_tokens
 
     @staticmethod
-    def escape(text : str) -> str:
+    def escape(text: str) -> str:
         return text.replace("<", "<<")
 
-    def encode(self, text : str, past_table : Dict[int, str] = {}) -> Tuple[List[int], Dict[int, str]]:
-        ext_table_rev : Dict[str, int] = {}
-        ext_table : Dict[int, str] = {}
+    def encode(
+        self, text: str, past_table: Dict[int, str] = {}
+    ) -> Tuple[List[int], Dict[int, str]]:
+        ext_table_rev: Dict[str, int] = {}
+        ext_table: Dict[int, str] = {}
         for idx, val in past_table.items():
             ext_table[idx] = val
             ext_table_rev[val] = idx
@@ -226,7 +201,7 @@ class CPMBeeTokenizer(object):
 
         return ret, ext_table
 
-    def decode(self, tokens : List[int], ext_table : Optional[Dict[int, str]] = None):
+    def decode(self, tokens: List[int], ext_table: Optional[Dict[int, str]] = None):
         """Decode ids into a string."""
         if ext_table is None:
             ext_table = {}

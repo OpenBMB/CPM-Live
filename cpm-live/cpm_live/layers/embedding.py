@@ -63,6 +63,7 @@ class Embedding(bmt.DistributedModule):
         logits = F.linear(x / math.sqrt(self.dim_model), self.weight)
         return logits
 
+
 class EmbeddingExt(bmt.DistributedModule):
     def __init__(
         self,
@@ -71,16 +72,14 @@ class EmbeddingExt(bmt.DistributedModule):
         dtype: torch.dtype = torch.half,
         init_mean: float = 0.0,
         init_std: float = 1,
-        distance_scale : int = 16,
+        distance_scale: int = 16,
     ):
 
         super().__init__()
 
         self.dim_model = embedding_size
         self.rotary_emb = RotaryEmbedding(
-            dim=embedding_size,
-            distance_scale=distance_scale,
-            dtype=dtype
+            dim=embedding_size, distance_scale=distance_scale, dtype=dtype
         )
 
         self.weight = bmt.DistributedParameter(
@@ -90,7 +89,7 @@ class EmbeddingExt(bmt.DistributedModule):
             ),
         )
 
-    def forward(self, ids: torch.Tensor, ids_sub : torch.Tensor):
+    def forward(self, ids: torch.Tensor, ids_sub: torch.Tensor):
         """
         Args:
             ids (:obj:`torch.Tensor` of shape ``(batch_size, seq_len)``): Indices of input sequence tokens.
@@ -102,7 +101,7 @@ class EmbeddingExt(bmt.DistributedModule):
         embeds = F.embedding(ids, self.weight) / math.sqrt(self.dim_model)
         return self.rotary_emb(embeds, ids_sub)
 
-    def projection(self, x: torch.Tensor, ext_table : Optional[torch.Tensor] = None):
+    def projection(self, x: torch.Tensor, ext_table: Optional[torch.Tensor] = None):
         """
         Projection based on embedding's weight. For example, embedding map vocab_size to embed_size, than projection map embed_size back to vocab_size.
         Args:
