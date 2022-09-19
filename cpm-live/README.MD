@@ -106,7 +106,13 @@ delta_model.log()
 
 #### 4. Feed your data
 
-Here, we provide an example code on adapting CPM-Ant to the summarization task. We choose the soft prompt corresponding to the `lm` task and organize the input data as follows:
+If you want to know how we convert the pre-training data into binary files, run the following command:
+
+```shell
+$ bash scripts/preprocess_dataset.sh
+```
+
+If you want to use our models on downstream tasks, we provide an example code on adapting CPM-Ant to the summarization task. Here, we choose the soft prompt corresponding to the `lm` task and organize the input data as follows:
 
 ```python
 from cpm_live.tokenizers import CPMAntTokenizer
