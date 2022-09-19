@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 def main():
     tokenizer = CPMBeeTokenizer()
-    dataloader = MixedDataset("datasets.json", 16, 2048, tokenizer, [0.5, 0.25, 0.25])
+    dataloader = MixedDataset("datasets.json", 16, 2048, tokenizer)
     if os.path.exists("data.pt"):
         # load dataset states if exists
         dataset_states = torch.load("data.pt")
