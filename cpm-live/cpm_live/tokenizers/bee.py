@@ -15,7 +15,7 @@
 
 import pkg_resources
 import io
-from typing import IO, Dict, List, Tuple
+from typing import IO, Dict, List, Optional, Tuple
 
 
 def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
@@ -56,20 +56,20 @@ class CPMBeeTokenizer(object):
     def __init__(
         self,
     ):
-
+        self.unk_token = "<unk>"
+        self.mask_token = "<mask>"
         self.bos_token = "<s>"
         self.eos_token = "</s>"
         self.line_token = "\n"
         self.space_token = " "
 
         self.encoder = load_vocab(pkg_resources.resource_stream("cpm_live", "vocabs/bee.txt"))
-        self.decoder = {v: k for k, v in self.encoder.items()}
-
         self.encoder[self.line_token] = self.encoder["</n>"]
         self.encoder[self.space_token] = self.encoder["</_>"]
-        del self.encoder[self.line_token]
-        del self.encoder[self.space_token]
+        del self.encoder["</n>"]
+        del self.encoder["</_>"]
 
+        self.decoder = {v: k for k, v in self.encoder.items()}
         self._special_tokens = {
             k: v
             for k, v in self.encoder.items()
@@ -99,6 +99,14 @@ class CPMBeeTokenizer(object):
     def bos_id(self):
         return self.encoder[self.bos_token]
 
+    @property
+    def unk_id(self):
+        return self.encoder[self.unk_token]
+    
+    @property
+    def mask_id(self):
+        return self.encoder[self.mask_token]
+        
     def __len__(self):
         return len(self.encoder)
 
@@ -198,9 +206,12 @@ class CPMBeeTokenizer(object):
     def escape(text : str) -> str:
         return text.replace("<", "<<")
 
-    def encode(self, text : str) -> Tuple[List[int], Dict[int, str]]:
+    def encode(self, text : str, past_table : Dict[int, str] = {}) -> Tuple[List[int], Dict[int, str]]:
         ext_table_rev : Dict[str, int] = {}
         ext_table : Dict[int, str] = {}
+        for idx, val in past_table.items():
+            ext_table[idx] = val
+            ext_table_rev[val] = idx
         ret = []
         for x in self.tokenize(text):
             if x.is_unk or (x.is_special and (x.token not in self.encoder)):
@@ -215,11 +226,10 @@ class CPMBeeTokenizer(object):
 
         return ret, ext_table
 
-    def decode(self, tokens : List[int], ext_table : Dict[int, str]):
+    def decode(self, tokens : List[int], ext_table : Optional[Dict[int, str]] = None):
         """Decode ids into a string."""
-        # tokens = [i for i in tokens if i >= 0]
-        # tokens : List[int] = []
-
+        if ext_table is None:
+            ext_table = {}
         ret = []
         for token in tokens:
             if token in ext_table:
