@@ -15,8 +15,10 @@
 
 from typing import List, Optional, Tuple
 import torch
+
+from cpm_live.tokenizers.bee import CPMBeeTokenizer
 from ..utils import Config
-from ..layers import Encoder, Embedding, BucketPositionBias
+from ..layers import Encoder, EmbeddingExt, BucketPositionBias
 import bmtrain as bmt
 
 
@@ -30,8 +32,8 @@ class CPMBeeConfig(Config):
         dim_ff=10240,
         num_layers=32,
         dropout_p=0.0,
-        position_bias_num_buckets=512,
-        position_bias_num_segment_buckets=64,
+        position_bias_num_buckets=256,
+        position_bias_num_segment_buckets=256,
         position_bias_max_distance=2048,
         eps=1e-6,
         half: bool = True,
@@ -58,7 +60,7 @@ class CPMBeeConfig(Config):
 
 
 class CPMBee(bmt.DistributedModule):
-    def __init__(self, config: CPMBeeConfig):
+    def __init__(self, config: CPMBeeConfig, tokenizer : CPMBeeTokenizer):
 
         super().__init__()
 
@@ -74,7 +76,7 @@ class CPMBee(bmt.DistributedModule):
             mask_modules=config.mask_modules,
         )
 
-        self.input_embedding = Embedding(
+        self.input_embedding = EmbeddingExt(
             vocab_size=config.vocab_size,
             embedding_size=config.dim_model,
             dtype=config.dtype,
@@ -88,10 +90,13 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
+        
+        self.unk_id = tokenizer.unk_id
 
     def forward(
         self,
         input: torch.Tensor,  # (batch, seqlen) int32
+        input_sub: torch.Tensor,  # (batch, seqlen) int32
         length: torch.Tensor,  # (batch) int32
         context: torch.Tensor,  # (batch, seqlen) bool
         sample_idx: torch.Tensor,  # (batch, seq_len) int32
@@ -103,7 +108,7 @@ class CPMBee(bmt.DistributedModule):
     ):
         batch = input.size(0)
         seqlen = input.size(1)
-
+        # processing masks and position bias bucket
         with torch.no_grad():
             device = input.device
 
@@ -158,9 +163,23 @@ class CPMBee(bmt.DistributedModule):
             )
             position = torch.arange(seqlen, device=device).expand(batch, seqlen)
 
-        hidden_states = self.input_embedding(input)
+        # processing unk table
+        with torch.no_grad():
+            num_unks = max(int(torch.masked_fill(
+                input_sub,
+                input != self.unk_id,
+                0
+            ).max().item()), 1)
+
+        hidden_states = self.input_embedding(input, input_sub)
         position_bias = self.position_bias(position, position, segment_bucket)
 
         hidden_states = self.encoder(hidden_states, attention_mask, position_bias)
-        logits = self.input_embedding.projection(hidden_states)
+
+        ext_table_ids = torch.tensor([self.unk_id], dtype=torch.int32, device="cuda").expand(num_unks)
+        ext_table_sub = torch.arange(num_unks, dtype=torch.int32, device="cuda")
+        ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
+
+        logits = self.input_embedding.projection(hidden_states, ext_table)
+        logits[..., self.unk_id] = -10000   # mask original unk
         return logits, hidden_states
