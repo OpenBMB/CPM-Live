@@ -2,5 +2,10 @@ torch>=1.10
 bmtrain>=0.1.8
 jieba
 tqdm
+<<<<<<< HEAD
 tensorboard
 numpy>=1.21.0
+=======
+numpy
+tensorboard
+>>>>>>> master

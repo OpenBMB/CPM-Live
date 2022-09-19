@@ -12,57 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from typing import List, Optional, Tuple
 import torch
-from ..utils import Config
-from ..layers import Encoder, Embedding, SegmentPositionEmbedding
-import bmtrain as bmt
+from ..native_layers import Encoder, Embedding, SegmentPositionEmbedding
+from .ant import CPMAntConfig
 
 
-class CPMAntConfig(Config):
-    def __init__(
-        self,
-        vocab_size=30720,
-        dim_model=4096,
-        num_heads=64,
-        dim_head=64,
-        dim_ff=10240,
-        num_layers=32,
-        dropout_p=0.0,
-        position_bias_num_buckets=512,
-        position_bias_max_distance=2048,
-        eps=1e-6,
-        half: bool = True,
-        prompt_types: int = 32,
-        prompt_length: int = 32,
-        segment_types: int = 32,
-        mask_modules: Optional[List[Tuple[bool, bool]]] = None,
-        **kwargs,
-    ):
-
-        super().__init__()
-        self.prompt_types = prompt_types
-        self.prompt_length = prompt_length
-        self.segment_types = segment_types
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.dim_head = dim_head
-        self.dim_ff = dim_ff
-        self.num_layers = num_layers
-        self.position_bias_num_buckets = position_bias_num_buckets
-        self.position_bias_max_distance = position_bias_max_distance
-        self.dropout_p = dropout_p
-        self.eps = eps
-        if half:
-            self.dtype = torch.half
-        else:
-            self.dtype = torch.float
-        self.vocab_size = vocab_size
-        self.mask_modules = mask_modules
-
-
-class CPMAnt(bmt.DistributedModule):
+class CPMAntTorch(torch.nn.Module):
     def __init__(self, config: CPMAntConfig):
 
         super().__init__()
