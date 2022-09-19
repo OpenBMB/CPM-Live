@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
+from typing import Union
 import torch
 import bmtrain as bmt
 import torch.nn.functional as F
@@ -213,3 +214,39 @@ class BucketPositionBias(bmt.DistributedModule):
             is_small, relative_position.to(torch.int32), relative_postion_if_large
         )
         return relative_buckets
+
+class RotaryEmbedding(bmt.DistributedModule):
+    def __init__(self, dim, base=10000, distance_scale : Union[int, float] = 1, dtype : torch.dtype = torch.half):
+        super().__init__()
+        inv_freq = 1. / (base ** (torch.arange(0, dim, 2, device="cuda", dtype=torch.float32) / dim))
+        inv_freq = inv_freq.to(dtype)
+        self.distance_scale = distance_scale
+        self.dtype = dtype
+        self.inv_freq = inv_freq
+
+    def forward(self, 
+            x : torch.Tensor,
+            x_pos : torch.Tensor
+        ):
+        """
+        Args:
+            x (:obj:`torch.Tensor` of shape ``(..., dim)``): Inputs.
+            x_pos (:obj:`torch.Tensor` of shape ``(...)``): Positions of inputs.
+        """
+        x_pos = x_pos * self.distance_scale
+        freqs = x_pos[..., None].to(self.dtype) * self.inv_freq[None, :]    # (..., dim/2)
+        
+        # the same implementation as sat
+        emb = torch.cat((freqs, freqs), dim=-1)     # (..., dim)
+        emb_cos = emb.cos()     # (..., dim)
+        emb_sin = emb.sin()     # (..., dim)
+        
+        rotate_x = torch.cat(
+            [
+                -x[..., x.size(-1) // 2:],
+                x[..., :x.size(-1) // 2]
+            ],
+            dim=-1
+        )   # (..., dim)
+        
+        return x * emb_cos + rotate_x * emb_sin
