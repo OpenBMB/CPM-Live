@@ -20,7 +20,7 @@ import os
 from queue import Empty
 from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Union
 from cpm_live.dataset import DistributedDataset
-from cpm_live.tokenizers import CPMAntTokenizer
+from cpm_live.tokenizers import CPMBeeTokenizer
 import numpy as np
 import time
 from numpy._typing import NDArray
@@ -33,6 +33,7 @@ class _MixedDatasetConfig(TypedDict):
     transforms: List[Dict[str, Any]]
     task_name: str
     dataset_name: str
+    incontext_weight : List[float]
 
     lines: int
     dataset: DistributedDataset
@@ -45,9 +46,15 @@ class _DictTree(TypedDict):
     segment_id: int
     need_predict: bool
 
+class _PrevExtTableStates(TypedDict):
+    ext_table : Dict[int, str]
+    mask_table : Dict[int, int]
+    unk_table : Dict[int, int]
+
 
 class CPMBeeBatch(TypedDict):
     inputs: NDArray[np.int32]
+    inputs_sub: NDArray[np.int32]
     length: NDArray[np.int32]
     context: NDArray[np.bool_]
     sample_ids: NDArray[np.int32]
@@ -66,17 +73,16 @@ class _MixedDatasetBatchPacker:
         self,
         batch_size: int,
         max_length: int,
-        tokenizer: CPMAntTokenizer,
-        incontext_sample_weight: Union[List[float], np.ndarray],
+        tokenizer: CPMBeeTokenizer,
         max_depth: int = 16,
     ) -> None:
         self._batch_size = batch_size
         self._max_length = max_length
-        self._sample_weight = np.array(incontext_sample_weight, dtype=np.float32)
         self._max_depth = max_depth
         self.tokenizer = tokenizer
 
         self._inputs: List[NDArray[np.int32]] = []
+        self._inputs_sub : List[NDArray[np.int32]] = []
         self._context: List[NDArray[np.int8]] = []
         self._sample_ids: List[NDArray[np.int32]] = []
         self._segments: List[NDArray[np.int32]] = []
@@ -162,9 +168,9 @@ class _MixedDatasetBatchPacker:
             # bucket 1 is reserved for incontext samples
             return ret + 1
 
-    def data_to_id(self, data: Any):
+    def data_to_id(self, data: Any, prev_ext_states : Optional[_PrevExtTableStates] = None):
         root: _DictTree = {
-            "value": "<d>",
+            "value": "<root>",
             "children": [],
             "depth": 0,
             "segment_id": 0,
@@ -186,14 +192,14 @@ class _MixedDatasetBatchPacker:
                     }
                     segments.append(child_info)
                     child_info["children"] = _build_dict_tree(
-                        v, depth + 1, need_predict or (depth == 1 and k == "answer")
-                    )  # elements in <root>.answer
+                        v, depth + 1, need_predict or (depth == 1 and k == "<ans>")
+                    )  # elements in <root>.<ans>
 
                     ret.append(child_info)
                 return ret
             else:
                 assert isinstance(data, str), "Invalid data {}".format(data)
-                ret: _DictTree = {
+                ret : _DictTree = {
                     "value": data,
                     "children": [],
                     "depth": depth,
@@ -228,19 +234,55 @@ class _MixedDatasetBatchPacker:
         _build_segment_rel(root)
 
         input_ids: List[int] = []
+        input_id_subs : List[int] = []
         segment_bound: List[Tuple[int, int]] = []
+
+        ext_table : Dict[int, str] = {}
+        mask_id_table : Dict[int, int] = {}
+        unk_id_table : Dict[int, int] = {}
+
+        if prev_ext_states is not None:
+            ext_table = prev_ext_states["ext_table"]
+            mask_id_table = prev_ext_states["mask_table"]
+            unk_id_table = prev_ext_states["unk_table"]
+
         for seg in segments:
+            tokens, ext_table = self.tokenizer.encode(seg["value"], ext_table)
+            
+            token_id_subs = []
+            reid_token_ids = []
+            for idx in tokens:
+                if idx in ext_table:
+                    # unk or mask
+                    token = ext_table[idx]
+                    if token.startswith("<s") and token.endswith(">"):
+                        # is mask
+                        if idx not in mask_id_table:
+                            mask_id_table[idx] = len(mask_id_table)
+                        reid_token_ids.append(self.tokenizer.mask_id)
+                        token_id_subs.append(mask_id_table[idx])
+                    else:
+                        if idx not in unk_id_table:
+                            unk_id_table[idx] = len(unk_id_table)
+                        reid_token_ids.append(self.tokenizer.unk_id)
+                        token_id_subs.append(unk_id_table[idx])
+                else:
+                    reid_token_ids.append(idx)
+                    token_id_subs.append(0)
             tokens = (
                 [self.tokenizer.bos_id]
-                + self.tokenizer.encode(seg["value"])
+                + reid_token_ids
                 + [self.tokenizer.eos_id]
             )
+            token_id_subs = [0] + token_id_subs + [0]
             begin = len(input_ids)
             input_ids.extend(tokens)
+            input_id_subs.extend(token_id_subs)
             end = len(input_ids)
             segment_bound.append((begin, end))
 
         ids = np.array(input_ids, dtype=np.int32)
+        id_subs = np.array(input_id_subs, dtype=np.int32)
         segs = np.zeros((ids.shape[0],), dtype=np.int32)
         context = np.zeros((ids.shape[0],), dtype=np.int8)
         for i, (begin, end) in enumerate(segment_bound):
@@ -249,10 +291,18 @@ class _MixedDatasetBatchPacker:
             else:
                 context[begin:end] = 1
             segs[begin:end] = i
-        return ids, context, segs, segment_rel, num_segments
+        
+        curr_ext_table_states : _PrevExtTableStates = {
+            "ext_table": ext_table,
+            "mask_table": mask_id_table,
+            "unk_table": unk_id_table,
+        }
+        return ids, id_subs, context, segs, segment_rel, num_segments, curr_ext_table_states
 
     def build_instance(self, config: _MixedDatasetConfig):
-        num_incontext = np.random.choice(self._sample_weight.shape[0], p=self._sample_weight)
+        _sample_weight = np.array(config["incontext_weight"], dtype=np.float32)
+        _sample_weight = _sample_weight / _sample_weight.sum()
+        num_incontext = np.random.choice(_sample_weight.shape[0], p=_sample_weight)
         ds = config["dataset"]
         transforms = config["transforms"]
         transform_id = np.random.choice(len(transforms) + 1)
@@ -265,7 +315,7 @@ class _MixedDatasetBatchPacker:
             inp = ds.read()
             inp = self.apply_transform(inp, transform)
 
-            input_ids, context, segment_ids, segment_rel, n_segments = self.data_to_id(inp)
+            input_ids, input_id_subs, context, segment_ids, segment_rel, n_segments, table_states = self.data_to_id(inp)
             if input_ids.shape[0] > self._max_length:
                 # too long
                 continue
@@ -285,13 +335,14 @@ class _MixedDatasetBatchPacker:
 
             sample = ds.read()
             sample = self.apply_transform(sample, transform)
-            sample_input_ids, _, sample_segments, sample_rel, n_segments = self.data_to_id(sample)
+            sample_input_ids, sample_id_subs, _, sample_segments, sample_rel, n_segments, table_states = self.data_to_id(sample, table_states)
 
             if input_ids.shape[0] + sample_input_ids.shape[0] > self._max_length:
                 # too long, break
                 break
 
             input_ids = np.concatenate([input_ids, sample_input_ids], axis=0)
+            input_id_subs = np.concatenate([input_id_subs, sample_id_subs], axis=0)
             context = np.concatenate(
                 [context, np.ones(sample_input_ids.shape, dtype=np.int8)], axis=0
             )
@@ -312,6 +363,7 @@ class _MixedDatasetBatchPacker:
             )
         return (
             input_ids,
+            input_id_subs,
             context,
             segment_ids,
             segment_rel_offset,
@@ -323,6 +375,7 @@ class _MixedDatasetBatchPacker:
     def add_data(self, config: _MixedDatasetConfig) -> Optional[CPMBeeBatch]:
         (
             input_ids,
+            input_id_subs,
             context,
             segment_ids,
             segment_rel_offset,
@@ -346,6 +399,7 @@ class _MixedDatasetBatchPacker:
         if best_fit is None:
             # add a new instance
             self._inputs.append(input_ids)
+            self._inputs_sub.append(input_id_subs)
             self._context.append(context)
             self._sample_ids.append(sample_ids)
             self._segments.append(segment_ids)
@@ -357,6 +411,7 @@ class _MixedDatasetBatchPacker:
         else:
             # add to existing instance
             self._inputs[best_fit] = np.concatenate([self._inputs[best_fit], input_ids], axis=0)
+            self._inputs_sub[best_fit] = np.concatenate([self._inputs_sub[best_fit], input_id_subs], axis=0)
             self._context[best_fit] = np.concatenate([self._context[best_fit], context], axis=0)
             self._sample_ids[best_fit] = np.concatenate(
                 [self._sample_ids[best_fit], sample_ids], axis=0
@@ -383,6 +438,7 @@ class _MixedDatasetBatchPacker:
         if len(self._inputs) > self._batch_size:
             # pack batch
             inputs = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
+            inputs_sub = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
             context = np.zeros((self._batch_size, self._max_length), dtype=np.int8)
             sample_ids = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
             segments = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
@@ -409,6 +465,7 @@ class _MixedDatasetBatchPacker:
                 instance_length = self._inputs[i].shape[0]
                 rel_size = self._segment_rel[i].shape[0]
                 inputs[i, :instance_length] = self._inputs[i]
+                inputs_sub[i, :instance_length] = self._inputs_sub[i]
                 context[i, :instance_length] = self._context[i]
                 sample_ids[i, :instance_length] = self._sample_ids[i]
                 segments[i, :instance_length] = self._segments[i]
@@ -427,8 +484,14 @@ class _MixedDatasetBatchPacker:
                 tgt[i, 0 : instance_length - 1] = np.where(
                     context[i, 1:instance_length] > 0, -100, inputs[i, 1:instance_length]
                 )
-
+            tgt[:, :-1] = np.where(
+                tgt[:, :-1] == self.tokenizer.unk_id,
+                self.tokenizer.vocab_size + inputs_sub[:, 1:],
+                tgt[:, :-1]
+            )
+            
             self._inputs = self._inputs[self._batch_size :]
+            self._inputs_sub = self._inputs_sub[self._batch_size:]
             self._context = self._context[self._batch_size :]
             self._sample_ids = self._sample_ids[self._batch_size :]
             self._segments = self._segments[self._batch_size :]
@@ -439,6 +502,7 @@ class _MixedDatasetBatchPacker:
             self._task_ids = self._task_ids[self._batch_size :]
             return {
                 "inputs": inputs,
+                "inputs_sub": inputs_sub,
                 "length": length,
                 "context": context > 0,
                 "sample_ids": sample_ids,
@@ -509,6 +573,9 @@ def _mixed_dataset_process(
             return weights
         else:
             raise RuntimeError("Empty datasets")
+    
+    def _dataset_identity(c : _MixedDatasetConfig):
+        return "{}.{}".format(c["task_name"], c["dataset_name"])
 
     cfg_mgr = _MixedDatasetConfigMananger(config_path)
     config = cfg_mgr.get_config()
@@ -526,6 +593,8 @@ def _mixed_dataset_process(
             c["weight"] = 1.0
         if "transforms" not in c:
             c["transforms"] = []
+        if "incontext_weight" not in c:
+            c["incontext_weight"] = [1.0]
 
     weights = _build_sample_weights(config)
 
@@ -543,16 +612,18 @@ def _mixed_dataset_process(
 
             # build path -> dataset map
             for c in config:
-                path_ds_map[c["path"]] = c
+                path_ds_map[_dataset_identity(c)] = c
 
             # add new datasets
             for c in nw_config:
-                if c["path"] in path_ds_map:
+                if _dataset_identity(c) in path_ds_map:
                     # update values only
                     if "weight" in c:
-                        path_ds_map[c["path"]]["weight"] = c["weight"]
+                        path_ds_map[_dataset_identity(c)]["weight"] = c["weight"]
                     if "transform" in c:
-                        path_ds_map[c["path"]]["transforms"] = c["transforms"]
+                        path_ds_map[_dataset_identity(c)]["transforms"] = c["transforms"]
+                    if "incontext_weight" in c:
+                        path_ds_map[_dataset_identity(c)]["incontext_weight"] = c["incontext_weight"]
                 else:
                     # new dataset
                     ds = DistributedDataset(
@@ -564,17 +635,21 @@ def _mixed_dataset_process(
                     c["dataset"] = ds
                     if "weight" not in c:
                         c["weight"] = 1.0
-                    path_ds_map[c["path"]] = c
-                nw_path_set.add(c["path"])
+                    if "transforms" not in c:
+                        c["transforms"] = []
+                    if "incontext_weight" not in c:
+                        c["incontext_weight"] = [1.0]
+                    path_ds_map[_dataset_identity(c)] = c
+                nw_path_set.add(_dataset_identity(c))
 
             # remove unused datasets
             for c in config:
-                if c["path"] not in nw_path_set:
-                    del path_ds_map[c["path"]]
+                if _dataset_identity(c) not in nw_path_set:
+                    del path_ds_map[_dataset_identity(c)]
 
             config: List[_MixedDatasetConfig] = []
             for c in nw_config:
-                config.append(path_ds_map[c["path"]])
+                config.append(path_ds_map[_dataset_identity(c)])
             del path_ds_map
             del nw_path_set
             del nw_config
@@ -594,14 +669,14 @@ def _mixed_dataset_process(
             elif cmd == "state_dict":
                 ret = OrderedDict()
                 for c in config:
-                    ds_name = "{}.{}".format(c["task_name"], c["dataset_name"])
+                    ds_name = _dataset_identity(c)
                     ret[ds_name] = c["dataset"]._state_dict()
                 q_cmd_out.put(ret)
             elif cmd == "load_state_dict":
                 state_dict = q_cmd.get()
                 missing = []
                 for c in config:
-                    ds_name = "{}.{}".format(c["task_name"], c["dataset_name"])
+                    ds_name = _dataset_identity(c)
                     if ds_name in state_dict:
                         c["dataset"].load_state_dict(state_dict[ds_name])
                     else:
@@ -665,15 +740,14 @@ class MixedDataset:
         config_path: str,
         batch_size: int,
         max_length: int,
-        tokenizer,
-        incontext_sample_weight: Union[List[float], np.ndarray],
+        tokenizer : CPMBeeTokenizer,
         max_depth: int = 16,
     ) -> None:
         self._q_cmd = multiprocessing.Queue()
         self._q_cmd_out = multiprocessing.Queue()
         self._q_data = multiprocessing.Queue(maxsize=1)
         self._packer = _MixedDatasetBatchPacker(
-            batch_size, max_length, tokenizer, incontext_sample_weight, max_depth
+            batch_size, max_length, tokenizer, max_depth
         )
         self._p = multiprocessing.Process(
             target=_mixed_dataset_process,
