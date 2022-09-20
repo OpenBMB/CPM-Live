@@ -99,7 +99,7 @@ Using Opendelta, we can insert a delta model (e.g. LoRA) into CPM-Ant with three
 ```python
 from opendelta import LoraModel
 
-delta_model = LoraModel(backbone_model=model)
+delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"])
 delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
 delta_model.log()
 ```
