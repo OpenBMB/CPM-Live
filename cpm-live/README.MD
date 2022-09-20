@@ -5,7 +5,7 @@
 <p>
 
 <p align="center">
-   <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92" target="_blank">Blog</a> • <a href="https://github.com/OpenBMB/CPM-Live/tree/master/cpm-live#model-checkpoints">Models</a>
+   <a href="https://live.openbmb.org/ant" target="_blank">Website</a> • <a href="https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92" target="_blank">Blog</a> • <a href="#model-checkpoints">Models</a>
 </p>
 
 ## Overview
@@ -106,7 +106,8 @@ delta_model.log()
 
 #### 4. Feed your data
 
-If you want to know how we convert the pre-training data into binary files, run the following command:
+We provide a [sample](./data_sample.txt) of the data used for pre-training.
+If you want to know how we convert the data to binary files, run the following command:
 
 ```shell
 $ bash scripts/preprocess_dataset.sh
@@ -149,7 +150,7 @@ target = np.full(length, -100, dtype=np.int32)
 target[:-1] = np.where(context[1:], -100, input_ids[1:])
 ```
 
-Now, convert these ids to tensors and feed them to the model for training! You can refer to [pretrain_cpm_ant.py](https://github.com/OpenBMB/CPM-Live/blob/master/cpm-live/pretrain_cpm_ant.py) for more details.
+Now, convert these ids to tensors and feed them to the model for training! You can refer to [pretrain_cpm_ant.py](./pretrain_cpm_ant.py) for more details.
 
 More examples on real-world datasets are coming soon!
 
