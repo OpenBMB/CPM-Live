@@ -177,7 +177,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 input_segment_rel,
                 input_span,
                 ext_table_ids,
-                ext_table_sub
+                ext_table_sub,
             )
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
             global_loss = bmt.sum_loss(loss).item()

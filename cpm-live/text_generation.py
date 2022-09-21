@@ -6,13 +6,7 @@ import torch
 if __name__ == "__main__":
 
     data_list = [
-        {
-            "document": "今天天气是真的<mask_0>，我吃了<mask_1>碗面条",
-            "<ans>": {
-                "<mask_0>": "",
-                "<mask_1>": ""
-            }
-        },
+        {"document": "今天天气是真的<mask_0>，我吃了<mask_1>碗面条", "<ans>": {"<mask_0>": "", "<mask_1>": ""}},
     ]
 
     config = CPMBeeConfig.from_json_file("config/cpm-bee-10b.json")
@@ -22,7 +16,6 @@ if __name__ == "__main__":
 
     model.load_state_dict(torch.load(ckpt_path))
     model.cuda()
-    
 
     # use beam search
     beam_search = CPMBeeBeamSearch(

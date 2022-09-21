@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from .position_embedding import RotaryEmbedding
 from typing import Optional
 
+
 class Embedding(torch.nn.Module):
     def __init__(
         self,
@@ -58,6 +59,7 @@ class Embedding(torch.nn.Module):
         logits = F.linear(x / math.sqrt(self.dim_model), self.weight)
         return logits
 
+
 class EmbeddingExt(torch.nn.Module):
     def __init__(
         self,
@@ -76,8 +78,8 @@ class EmbeddingExt(torch.nn.Module):
             dim=embedding_size, distance_scale=distance_scale, dtype=dtype
         )
 
-        self.weight = torch.nn.Parameter(
-            torch.empty(vocab_size, embedding_size, dtype=dtype)
+        self.weight = torch.nn.parameter.Parameter(
+            torch.empty(vocab_size, embedding_size, dtype=dtype),
         )
 
     def forward(self, ids: torch.Tensor, ids_sub: torch.Tensor):

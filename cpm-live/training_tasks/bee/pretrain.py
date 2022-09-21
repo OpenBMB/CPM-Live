@@ -272,9 +272,7 @@ class _MixedDatasetBatchPacker:
                         token_id_table[token_name][idx] = len(token_id_table[token_name])
                     if token_name not in self.tokenizer.encoder:
                         raise ValueError("Invalid token {}".format(token))
-                    reid_token_ids.append(
-                        self.tokenizer.encoder[token_name]
-                    )
+                    reid_token_ids.append(self.tokenizer.encoder[token_name])
                     token_id_subs.append(token_id_table[token_name][idx])
                 else:
                     reid_token_ids.append(idx)
@@ -298,7 +296,7 @@ class _MixedDatasetBatchPacker:
 
         curr_ext_table_states: _PrevExtTableStates = {
             "ext_table": ext_table,
-            "token_id_table": token_id_table
+            "token_id_table": token_id_table,
         }
         return ids, id_subs, context, segs, segment_rel, num_segments, curr_ext_table_states
 
@@ -481,9 +479,9 @@ class _MixedDatasetBatchPacker:
             task_names: List[str] = list(all_task_names)
             task_name_to_id = {name: i for i, name in enumerate(task_names)}
 
-            batch_ext_table_map : Dict[Tuple[int, int], int] = {}
-            batch_ext_table_ids : List[int] = []
-            batch_ext_table_sub : List[int] = []
+            batch_ext_table_map: Dict[Tuple[int, int], int] = {}
+            batch_ext_table_ids: List[int] = []
+            batch_ext_table_sub: List[int] = []
             for i in range(self._batch_size):
                 instance_length = self._inputs[i].shape[0]
                 rel_size = self._segment_rel[i].shape[0]
@@ -504,7 +502,7 @@ class _MixedDatasetBatchPacker:
                     task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
                     span_begin = span_end
                 length[i] = instance_length
-                
+
                 for j in range(instance_length):
                     idx, idx_sub = self._inputs[i][j], self._inputs_sub[i][j]
                     tgt_idx = idx
@@ -517,7 +515,7 @@ class _MixedDatasetBatchPacker:
                         tgt_idx = batch_ext_table_map[(idx, idx_sub)] + self.tokenizer.vocab_size
                     if context[i, j] == 0 and idx != self.tokenizer.bos_id and j > 1:
                         tgt[i, j - 1] = tgt_idx
-            if len(batch_ext_table_map)  == 0:
+            if len(batch_ext_table_map) == 0:
                 # placeholder
                 batch_ext_table_ids.append(0)
                 batch_ext_table_sub.append(1)

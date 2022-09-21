@@ -142,7 +142,7 @@ class BucketPositionBias(torch.nn.Module):
         self.num_segment_bucket = num_segment_bucket
         self.max_distance = max_distance
 
-        self.relative_attention_bias = torch.nn.Parameter(
+        self.relative_attention_bias = torch.nn.parameter.Parameter(
             torch.empty(num_buckets + num_segment_bucket, num_heads, dtype=dtype)
         )
 

@@ -7,17 +7,19 @@ from ..tokenizers.bee import CPMBeeTokenizer
 from ..models.bee import CPMBee
 from training_tasks.bee.pretrain import _MixedDatasetBatchPacker
 
+
 class CPMBeeGeneration:
-    def __init__(self, model : CPMBee, tokenizer : CPMBeeTokenizer):
+    def __init__(self, model: CPMBee, tokenizer: CPMBeeTokenizer):
         model.eval()
         self.model = model
         self.tokenizer = tokenizer
 
         self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer)
 
-    def _convert_to_tensors(self, data : Any, in_context_samples : List[Any] = []):
+    def _convert_to_tensors(self, data: Any, in_context_samples: List[Any] = []):
         answer_placeholders = []
-        def _put_placeholder(data : Any, path : List[str] = []):
+
+        def _put_placeholder(data: Any, path: List[str] = []):
             if isinstance(data, dict):
                 ret = {}
                 for k, v in data.items():
@@ -26,6 +28,7 @@ class CPMBeeGeneration:
             else:
                 answer_placeholders.append(path)
                 return "<ans_{}>".format(len(answer_placeholders))
+
         data["<ans>"] = _put_placeholder(data["<ans>"])
         (
             input_ids,
@@ -37,18 +40,18 @@ class CPMBeeGeneration:
             table_states,
         ) = self._packer.data_to_id(data)
 
-        sub_ans_map : Dict[int, int] = {}
+        sub_ans_map: Dict[int, int] = {}
         for fake_id, token_sub in table_states["token_id_table"]["<ans>"].items():
             token = table_states["ext_table"][fake_id]
             if token.startswith("<ans_") and token.endswith(">"):
                 ans_id = int(token[5:-1])
                 sub_ans_map[token_sub] = ans_id
-        
+
         tmp_input_ids = []
         tmp_input_sub = []
         tmp_input_seg = []
 
-        predict_segments : List[Tuple[int, int, int]] = []
+        predict_segments: List[Tuple[int, int]] = []
         for i in range(input_ids.shape[0]):
             if context[i] == 0:
                 if input_ids[i] == self.tokenizer.encoder["<ans>"]:
@@ -71,7 +74,7 @@ class CPMBeeGeneration:
         segment_rel_offset = np.zeros(input_ids.shape, dtype=np.int32)
         num_segments = np.full(input_ids.shape, n_segments, dtype=np.int32)
 
-        for sample in in_context_samples:
+        for i, sample in enumerate(in_context_samples):
             (
                 sample_input_ids,
                 sample_id_subs,
@@ -102,7 +105,7 @@ class CPMBeeGeneration:
                 [num_segments, np.full(sample_input_ids.shape, n_segments, dtype=np.int32)], axis=0
             )
         input_pos = np.arange(input_ids.shape[0], dtype=np.int32)
-        
+
         return (
             input_ids,
             input_id_subs,
@@ -118,17 +121,16 @@ class CPMBeeGeneration:
             table_states["ext_table"],
             table_states["token_id_table"],
         )
-        
 
-    def _process_list(self, data_list : List[Any]):
+    def _process_list(self, data_list: List[Any]):
         pack_tensor = []
         other_info = []
         segment_rel_pack = []
-        
-        batch_ext_table_map : Dict[Tuple[int, int], int] = {}
-        batch_ext_table_ids : List[int] = []
-        batch_ext_table_sub : List[int] = []
-        
+
+        batch_ext_table_map: Dict[Tuple[int, int], int] = {}
+        batch_ext_table_ids: List[int] = []
+        batch_ext_table_sub: List[int] = []
+
         for data in data_list:
             (
                 input_ids,
@@ -145,7 +147,7 @@ class CPMBeeGeneration:
                 ext_table,
                 token_id_table,
             ) = self._convert_to_tensors(data, [])
-            rev_ext_table : Dict[int, str] = {}
+            rev_ext_table: Dict[int, str] = {}
             for token, mp in token_id_table.items():
                 if token == "<ans>":
                     continue
@@ -153,43 +155,55 @@ class CPMBeeGeneration:
                 for fake_id, token_sub in mp.items():
                     if token_sub > 0:
                         if (token_id, token_sub) not in batch_ext_table_map:
-                            batch_ext_table_map[(token_id, token_sub)] = len(batch_ext_table_ids) + self.tokenizer.vocab_size
+                            batch_ext_table_map[(token_id, token_sub)] = (
+                                len(batch_ext_table_ids) + self.tokenizer.vocab_size
+                            )
                             batch_ext_table_ids.append(token_id)
                             batch_ext_table_sub.append(token_sub)
-                        rev_ext_table[batch_ext_table_map[(token_id, token_sub)]] = ext_table[fake_id]
+                        rev_ext_table[batch_ext_table_map[(token_id, token_sub)]] = ext_table[
+                            fake_id
+                        ]
                     else:
                         rev_ext_table[token_id] = ext_table[fake_id]
-            pack_tensor.append({
-                "input": torch.from_numpy(input_ids).unsqueeze(0),
-                "input_sub": torch.from_numpy(input_id_subs).unsqueeze(0),
-                "input_pos": torch.from_numpy(input_pos).unsqueeze(0),
-                "context": torch.from_numpy(context).unsqueeze(0),
-                "sample_idx": torch.from_numpy(sample_ids).unsqueeze(0),
-                "num_segments": torch.from_numpy(num_segments).unsqueeze(0),
-                "segment": torch.from_numpy(segment_ids).unsqueeze(0),
-                "segment_rel_offset": torch.from_numpy(segment_rel_offset).unsqueeze(0),
-            })
+            pack_tensor.append(
+                {
+                    "input": torch.from_numpy(input_ids).unsqueeze(0),
+                    "input_sub": torch.from_numpy(input_id_subs).unsqueeze(0),
+                    "input_pos": torch.from_numpy(input_pos).unsqueeze(0),
+                    "context": torch.from_numpy(context).unsqueeze(0),
+                    "sample_idx": torch.from_numpy(sample_ids).unsqueeze(0),
+                    "num_segments": torch.from_numpy(num_segments).unsqueeze(0),
+                    "segment": torch.from_numpy(segment_ids).unsqueeze(0),
+                    "segment_rel_offset": torch.from_numpy(segment_rel_offset).unsqueeze(0),
+                }
+            )
             segment_rel_pack.append(torch.from_numpy(segment_rel))
-            other_info.append({
-                "predict_segments": predict_segments,
-                "answer_placeholders": answer_placeholders,
-                "ext_table": rev_ext_table,
-            })
-            
+            other_info.append(
+                {
+                    "predict_segments": predict_segments,
+                    "answer_placeholders": answer_placeholders,
+                    "ext_table": rev_ext_table,
+                }
+            )
+
         keys = set(pack_tensor[0].keys())
         padded = {}
         for key in keys:
             padded[key] = pad(pack_tensor, key).cuda()
-        
+
         max_num_rels = 0
         for rel in segment_rel_pack:
             max_num_rels = max(max_num_rels, rel.size(0))
         padded_rels = torch.zeros(len(segment_rel_pack), max_num_rels, dtype=torch.int32)
         for i, rel in enumerate(segment_rel_pack):
-            padded_rels[i, :rel.size(0)] = rel
+            padded_rels[i, : rel.size(0)] = rel
         padded["segment_rel"] = padded_rels.cuda()
-        padded["batch_ext_table_ids"] = torch.tensor(batch_ext_table_ids, dtype=torch.int32, device="cuda")
-        padded["batch_ext_table_sub"] = torch.tensor(batch_ext_table_sub, dtype=torch.int32, device="cuda")
+        padded["batch_ext_table_ids"] = torch.tensor(
+            batch_ext_table_ids, dtype=torch.int32, device="cuda"
+        )
+        padded["batch_ext_table_sub"] = torch.tensor(
+            batch_ext_table_sub, dtype=torch.int32, device="cuda"
+        )
         return padded, other_info
 
     def generate(self, data_list, **kwargs):
@@ -197,19 +211,19 @@ class CPMBeeGeneration:
         with torch.inference_mode():
             result_ids = self._decode(model_inputs, other_info, **kwargs)
         for sent_id, result in enumerate(result_ids):
-            ans_result_map : Dict[int, List[int]] = {}
+            ans_result_map: Dict[int, List[int]] = {}
             for raw_word_id, ans_id in result:
                 if ans_id not in ans_result_map:
                     ans_result_map[ans_id] = []
                 ans_result_map[ans_id].append(raw_word_id)
-            
+
             answer_placeholders = other_info[sent_id]["answer_placeholders"]
             ext_table = other_info[sent_id]["ext_table"]
             data = data_list[sent_id]
             for ans_id, token_ids in ans_result_map.items():
                 text = self.tokenizer.decode(token_ids, ext_table)
                 path = answer_placeholders[ans_id - 1]
-                
+
                 p = data["<ans>"]
                 for part in path[:-1]:
                     p = p[part]
@@ -251,74 +265,74 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
 
         # expand dimmension
         batch_size = model_inputs["input"].size(0)
-        input : torch.Tensor = (
+        input: torch.Tensor = (
             model_inputs["input"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        input_sub : torch.Tensor = (
+        input_sub: torch.Tensor = (
             model_inputs["input_sub"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        input_pos : torch.Tensor = (
+        input_pos: torch.Tensor = (
             model_inputs["input_pos"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        context : torch.Tensor = (
+        context: torch.Tensor = (
             model_inputs["context"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        sample_ids : torch.Tensor = (
+        sample_ids: torch.Tensor = (
             model_inputs["sample_idx"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        num_segments : torch.Tensor = (
+        num_segments: torch.Tensor = (
             model_inputs["num_segments"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        segment : torch.Tensor = (
+        segment: torch.Tensor = (
             model_inputs["segment"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        segment_rel_offset : torch.Tensor = (
+        segment_rel_offset: torch.Tensor = (
             model_inputs["segment_rel_offset"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        segment_rel : torch.Tensor = (
+        segment_rel: torch.Tensor = (
             model_inputs["segment_rel"]
             .unsqueeze(1)
             .expand(batch_size, beam_size, -1)
             .contiguous()
             .view(batch_size * beam_size, -1)
         )
-        ext_table_ids : torch.Tensor = model_inputs["batch_ext_table_ids"]
-        ext_table_sub : torch.Tensor = model_inputs["batch_ext_table_sub"]
+        ext_table_ids: torch.Tensor = model_inputs["batch_ext_table_ids"]
+        ext_table_sub: torch.Tensor = model_inputs["batch_ext_table_sub"]
         ext_table_ids_cpu = ext_table_ids.cpu()
         ext_table_sub_cpu = ext_table_sub.cpu()
-        
+
         done = [False for _ in range(batch_size)]
 
         beam_scores = torch.zeros((batch_size, beam_size), dtype=torch.float, device=input.device)
@@ -332,7 +346,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
         ]
 
         pred_start_index = input.size(-1)
-        _, _, past_key_values =  self.model.inference(
+        _, _, past_key_values = self.model.inference(
             input=input,
             input_sub=input_sub,
             position=input_pos,
@@ -344,7 +358,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
             segment_rel=segment_rel,
             ext_table_ids=ext_table_ids,
             ext_table_sub=ext_table_sub,
-            past_key_values=None
+            past_key_values=None,
         )
 
         beam_states = []
@@ -352,14 +366,16 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
             instance_beam_states = []
 
             for beam_id in range(beam_size):
-                instance_beam_states.append({
-                    "idx": 0,
-                    "ans": [],
-                    "nx_token_id": self.tokenizer.bos_id,
-                    "nx_token_sub": 0,
-                    "nx_segment_id": other_info[sent_id]["predict_segments"][0][0],
-                    "nx_position": 0
-                })
+                instance_beam_states.append(
+                    {
+                        "idx": 0,
+                        "ans": [],
+                        "nx_token_id": self.tokenizer.bos_id,
+                        "nx_token_sub": 0,
+                        "nx_segment_id": other_info[sent_id]["predict_segments"][0][0],
+                        "nx_position": 0,
+                    }
+                )
             beam_states.append(instance_beam_states)
         for i in range(max_length + 1):
             tmp_input = []
@@ -373,30 +389,45 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                     tmp_position.append(beam_states[sent_id][beam_id]["nx_position"])
                     tmp_segment.append(beam_states[sent_id][beam_id]["nx_segment_id"])
             with torch.no_grad():
-                input = torch.cat([
-                    input,
-                    torch.tensor(tmp_input, dtype=torch.int32, device="cuda").view(batch_size * beam_size, 1)
-                ], dim=-1)
+                input = torch.cat(
+                    [
+                        input,
+                        torch.tensor(tmp_input, dtype=torch.int32, device="cuda").view(
+                            batch_size * beam_size, 1
+                        ),
+                    ],
+                    dim=-1,
+                )
                 logits, _, past_key_values = self.model.inference(
                     input=input[:, -1:],
-                    input_sub=torch.tensor(tmp_input_sub, dtype=torch.int32, device="cuda").view(batch_size * beam_size, 1),
-                    position=torch.tensor(tmp_position, dtype=torch.int32, device="cuda").view(batch_size * beam_size, 1),
-                    context=torch.ones(batch_size * beam_size, dtype=torch.bool, device="cuda").view(batch_size * beam_size, 1),
-                    sample_ids=torch.zeros(batch_size * beam_size, dtype=torch.int32, device="cuda").view(batch_size * beam_size, 1),
+                    input_sub=torch.tensor(tmp_input_sub, dtype=torch.int32, device="cuda").view(
+                        batch_size * beam_size, 1
+                    ),
+                    position=torch.tensor(tmp_position, dtype=torch.int32, device="cuda").view(
+                        batch_size * beam_size, 1
+                    ),
+                    context=torch.ones(
+                        batch_size * beam_size, dtype=torch.bool, device="cuda"
+                    ).view(batch_size * beam_size, 1),
+                    sample_ids=torch.zeros(
+                        batch_size * beam_size, dtype=torch.int32, device="cuda"
+                    ).view(batch_size * beam_size, 1),
                     num_segments=num_segments[:, -1:],
-                    segment=torch.tensor(tmp_segment, dtype=torch.int32, device="cuda").view(batch_size * beam_size, 1),
+                    segment=torch.tensor(tmp_segment, dtype=torch.int32, device="cuda").view(
+                        batch_size * beam_size, 1
+                    ),
                     segment_rel_offset=segment_rel_offset[:, -1:],
                     segment_rel=segment_rel,
                     ext_table_ids=ext_table_ids,
                     ext_table_sub=ext_table_sub,
-                    past_key_values=past_key_values
+                    past_key_values=past_key_values,
                 )
                 logits = logits[:, -1, :]
 
             # skip all steps when we are done with each sentence
             if all(done):
                 break
-            
+
             repetition_penalty(
                 logits,
                 batch_size,
@@ -429,14 +460,21 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                 )
                 if done[sent_id]:
                     next_beam_states.append(
-                        [({
-                            "idx": 0,
-                            "ans": [],
-                            "nx_token_id": 0,
-                            "nx_token_sub": 0,
-                            "nx_segment_id": 0,
-                            "nx_position": 0
-                        }, 0, 0)] * beam_size
+                        [
+                            (
+                                {
+                                    "idx": 0,
+                                    "ans": [],
+                                    "nx_token_id": 0,
+                                    "nx_token_sub": 0,
+                                    "nx_segment_id": 0,
+                                    "nx_position": 0,
+                                },
+                                0,
+                                0,
+                            )
+                        ]
+                        * beam_size
                     )  # pad the batch
                     continue
 
@@ -452,22 +490,32 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
 
                     curr_info = beam_states[sent_id][beam_id]
                     # end of sentence, or next word
-                    if (word_id == self.tokenizer.eos_id and (curr_info["idx"] + 1 == len(other_info[sent_id]["predict_segments"]))) or \
-                        i == max_length:
+                    if (
+                        word_id == self.tokenizer.eos_id
+                        and (curr_info["idx"] + 1 == len(other_info[sent_id]["predict_segments"]))
+                    ) or i == max_length:
 
                         generated_hyps[sent_id].add(
                             beam_states[sent_id][beam_id]["ans"],
                             value.item(),
                         )
                     elif word_id == self.tokenizer.eos_id:
-                        next_instance_beam_states.append(({
-                            "idx": curr_info["idx"] + 1,
-                            "ans": curr_info["ans"],
-                            "nx_token_id": self.tokenizer.bos_id,
-                            "nx_token_sub": 0,
-                            "nx_segment_id": other_info[sent_id]["predict_segments"][curr_info["idx"] + 1][0],
-                            "nx_position": 0
-                        }, value.item(), sent_id * beam_size + beam_id))
+                        next_instance_beam_states.append(
+                            (
+                                {
+                                    "idx": curr_info["idx"] + 1,
+                                    "ans": curr_info["ans"],
+                                    "nx_token_id": self.tokenizer.bos_id,
+                                    "nx_token_sub": 0,
+                                    "nx_segment_id": other_info[sent_id]["predict_segments"][
+                                        curr_info["idx"] + 1
+                                    ][0],
+                                    "nx_position": 0,
+                                },
+                                value.item(),
+                                sent_id * beam_size + beam_id,
+                            )
+                        )
 
                     else:
                         raw_word_id = word_id
@@ -477,24 +525,33 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                             word_id_sub = int(ext_table_sub_cpu[word_id].item())
                             word_id = int(ext_table_ids_cpu[word_id].item())
 
-                        next_instance_beam_states.append(({
-                            "idx": curr_info["idx"],
-                            "ans": curr_info["ans"] + [
-                                (
-                                    raw_word_id, 
-                                    other_info[sent_id]["predict_segments"][curr_info["idx"]][1]
-                                )
-                            ],
-                            "nx_token_id": word_id,
-                            "nx_token_sub": word_id_sub,
-                            "nx_segment_id": curr_info["nx_segment_id"],
-                            "nx_position": curr_info["nx_position"] + 1
-                        }, value.item(), sent_id * beam_size + beam_id))
+                        next_instance_beam_states.append(
+                            (
+                                {
+                                    "idx": curr_info["idx"],
+                                    "ans": curr_info["ans"]
+                                    + [
+                                        (
+                                            raw_word_id,
+                                            other_info[sent_id]["predict_segments"][
+                                                curr_info["idx"]
+                                            ][1],
+                                        )
+                                    ],
+                                    "nx_token_id": word_id,
+                                    "nx_token_sub": word_id_sub,
+                                    "nx_segment_id": curr_info["nx_segment_id"],
+                                    "nx_position": curr_info["nx_position"] + 1,
+                                },
+                                value.item(),
+                                sent_id * beam_size + beam_id,
+                            )
+                        )
 
                     # the beam for next step is full
                     if len(next_instance_beam_states) == beam_size:
                         break
-                
+
                 # update next beam content
                 assert len(next_instance_beam_states) == 0 if i == max_length else beam_size
                 next_beam_states.append(next_instance_beam_states)
@@ -515,7 +572,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                     beam_new_scores.append(value)
                     instance_beam_states.append(state)
                 beam_states.append(instance_beam_states)
-            
+
             input = input[beam_reorder_idx, :]
             beam_scores = torch.tensor(beam_new_scores, dtype=torch.float, device=input.device)
             for kw in past_key_values.keys():
@@ -523,10 +580,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                     buf_list = past_key_values[kw]
                     nw_buf_list = []
                     for k_buf, v_buf in buf_list:
-                        nw_buf_list.append((
-                            k_buf[beam_reorder_idx,:],
-                            v_buf[beam_reorder_idx,:]
-                        ))
+                        nw_buf_list.append((k_buf[beam_reorder_idx, :], v_buf[beam_reorder_idx, :]))
                     past_key_values[kw] = nw_buf_list
                 else:
                     past_key_values[kw] = past_key_values[kw][beam_reorder_idx, :]

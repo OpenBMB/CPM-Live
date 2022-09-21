@@ -23,12 +23,13 @@ import bmtrain as bmt
 
 
 class CPMBeeInferenceState(TypedDict):
-    buffer_position : torch.Tensor
-    buffer_context : torch.Tensor
-    buffer_sample_ids : torch.Tensor
-    buffer_num_segments : torch.Tensor
-    buffer_segments : torch.Tensor
-    buffer : List[Tuple[torch.Tensor, torch.Tensor]]
+    buffer_position: torch.Tensor
+    buffer_context: torch.Tensor
+    buffer_sample_ids: torch.Tensor
+    buffer_num_segments: torch.Tensor
+    buffer_segments: torch.Tensor
+    buffer: List[Tuple[torch.Tensor, torch.Tensor]]
+
 
 class CPMBeeConfig(Config):
     def __init__(
@@ -111,8 +112,8 @@ class CPMBee(bmt.DistributedModule):
         segment_rel_offset: torch.Tensor,  # (batch, seq_len) int32
         segment_rel: torch.Tensor,  # (batch, num_segment_bucket) int32
         span: torch.Tensor,  # (batch, seqlen) int32
-        ext_table_ids : torch.Tensor,   # (ext_table_size) int32
-        ext_table_sub : torch.Tensor,   # (ext_table_size) int32
+        ext_table_ids: torch.Tensor,  # (ext_table_size) int32
+        ext_table_sub: torch.Tensor,  # (ext_table_size) int32
     ):
         batch = input.size(0)
         seqlen = input.size(1)
@@ -185,17 +186,17 @@ class CPMBee(bmt.DistributedModule):
         self,
         input: torch.Tensor,  # (batch, len_q) int32
         input_sub: torch.Tensor,  # (batch, len_q) int32
-        position : torch.Tensor,  # (batch, len_q)  int32
+        position: torch.Tensor,  # (batch, len_q)  int32
         context: torch.Tensor,  # (batch, len_q) bool
         sample_ids: torch.Tensor,  # (batch, len_q) int32
         num_segments: torch.Tensor,  # (batch, len_q) int32
         segment: torch.Tensor,  # (batch, len_q) int32
         segment_rel_offset: torch.Tensor,  # (batch, len_q) int32
         segment_rel: torch.Tensor,  # (batch, num_segment_bucket) int32
-        ext_table_ids : torch.Tensor,   # (ext_table_size) int32
-        ext_table_sub : torch.Tensor,   # (ext_table_size) int32
-        past_key_values : Optional[CPMBeeInferenceState] = None
-    ):
+        ext_table_ids: torch.Tensor,  # (ext_table_size) int32
+        ext_table_sub: torch.Tensor,  # (ext_table_size) int32
+        past_key_values: Optional[CPMBeeInferenceState] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, CPMBeeInferenceState]:
         with torch.no_grad():
             if past_key_values is None:
                 present_position = position
@@ -205,27 +206,16 @@ class CPMBee(bmt.DistributedModule):
                 present_segments = segment
                 present_buffer = None
             else:
-                present_position = torch.cat([
-                    past_key_values['buffer_position'],
-                    position
-                ], dim=-1)
-                present_context = torch.cat([
-                    past_key_values['buffer_context'],
-                    context
-                ], dim=-1)
-                present_sample_ids = torch.cat([
-                    past_key_values['buffer_sample_ids'],
-                    sample_ids
-                ], dim=-1)
-                present_num_segments = torch.cat([
-                    past_key_values['buffer_num_segments'],
-                    num_segments
-                ], dim=-1)
-                present_segments = torch.cat([
-                    past_key_values['buffer_segments'],
-                    segment
-                ], dim=-1)
-                present_buffer = past_key_values['buffer']
+                present_position = torch.cat([past_key_values["buffer_position"], position], dim=-1)
+                present_context = torch.cat([past_key_values["buffer_context"], context], dim=-1)
+                present_sample_ids = torch.cat(
+                    [past_key_values["buffer_sample_ids"], sample_ids], dim=-1
+                )
+                present_num_segments = torch.cat(
+                    [past_key_values["buffer_num_segments"], num_segments], dim=-1
+                )
+                present_segments = torch.cat([past_key_values["buffer_segments"], segment], dim=-1)
+                present_buffer = past_key_values["buffer"]
 
             batch = input.size(0)
             len_q = input.size(1)
@@ -262,32 +252,37 @@ class CPMBee(bmt.DistributedModule):
             )
             # context mask
             attention_mask = present_context[:, None, :] | (
-                context[:, :, None].logical_not() & directional_mask_2d.view(batch, len_q, len_buffer)
+                context[:, :, None].logical_not()
+                & directional_mask_2d.view(batch, len_q, len_buffer)
             )
             # span mask
-            attention_mask = (
-                attention_mask & sample_mask_2d
-            )
+            attention_mask = attention_mask & sample_mask_2d
             # length mask
-            mask_1d = (present_num_segments != 0)
-            attention_mask = (
-                mask_1d.view(batch, 1, len_buffer) & attention_mask
-            )
+            mask_1d = present_num_segments != 0
+            attention_mask = mask_1d.view(batch, 1, len_buffer) & attention_mask
 
             hidden_states = self.input_embedding(input, input_sub)
-            
+
             position_bias = self.position_bias(position, present_position, segment_bucket)
             hidden_states, present_key_values = self.encoder(
-                hidden_states, attention_mask, position_bias, True, present_buffer,
+                hidden_states,
+                attention_mask,
+                position_bias,
+                True,
+                present_buffer,
             )
             ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
             logits = self.input_embedding.projection(hidden_states, ext_table)
-            
-            return logits, hidden_states, {
-                "buffer_position": present_position,
-                "buffer_context": present_context,
-                "buffer_sample_ids": present_sample_ids,
-                "buffer_num_segments": present_num_segments,
-                "buffer_segments": present_segments,
-                "buffer": present_key_values
-            }
+
+            return (
+                logits,
+                hidden_states,
+                {
+                    "buffer_position": present_position,
+                    "buffer_context": present_context,
+                    "buffer_sample_ids": present_sample_ids,
+                    "buffer_num_segments": present_num_segments,
+                    "buffer_segments": present_segments,
+                    "buffer": present_key_values,
+                },
+            )
