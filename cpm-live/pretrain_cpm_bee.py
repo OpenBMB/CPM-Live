@@ -33,9 +33,9 @@ def get_tokenizer(args):
     return tokenizer
 
 
-def get_model(args, tokenizer: CPMBeeTokenizer):
+def get_model(args):
     config = CPMBeeConfig.from_json_file(args.model_config)
-    model = CPMBee(config, tokenizer)
+    model = CPMBee(config)
     if args.load is not None:
         bmt.load(model, args.load)
     else:
@@ -71,8 +71,8 @@ def get_learning_rate_scheduler(args, optimizer):
 
 
 def setup_model_and_optimizer(args):
+    model = get_model(args)
     tokenizer = get_tokenizer(args)
-    model = get_model(args, tokenizer)
     bmt.synchronize()
     optimizer = get_optimizer(args, model)
     lr_scheduler = get_learning_rate_scheduler(args, optimizer)
