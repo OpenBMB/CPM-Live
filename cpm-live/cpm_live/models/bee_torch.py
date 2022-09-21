@@ -16,7 +16,6 @@
 from typing import Optional, Tuple
 import torch
 
-from ..tokenizers.bee import CPMBeeTokenizer
 from ..native_layers import Encoder, EmbeddingExt, BucketPositionBias
 from .bee import CPMBeeConfig, CPMBeeInferenceState
 
