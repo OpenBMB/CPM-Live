@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
-from .utils import BeamHypotheses, repetition_penalty, pad, top_k_top_p_filtering
+from .utils import BeamHypotheses, repetition_penalty, pad
 from ..tokenizers.bee import CPMBeeTokenizer
 from ..models.bee import CPMBee
 from training_tasks.bee.pretrain import _MixedDatasetBatchPacker
@@ -341,7 +341,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
 
         # generated hypotheses
         generated_hyps = [
-            BeamHypotheses(beam_size, max_length, length_penalty=1, early_stopping=False)
+            BeamHypotheses(beam_size, max_length, length_penalty=0, early_stopping=False)
             for _ in range(batch_size)
         ]
 
@@ -494,7 +494,6 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                         word_id == self.tokenizer.eos_id
                         and (curr_info["idx"] + 1 == len(other_info[sent_id]["predict_segments"]))
                     ) or i == max_length:
-
                         generated_hyps[sent_id].add(
                             beam_states[sent_id][beam_id]["ans"],
                             value.item(),
