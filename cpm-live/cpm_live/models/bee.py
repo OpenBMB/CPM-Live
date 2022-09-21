@@ -68,7 +68,7 @@ class CPMBeeConfig(Config):
 
 
 class CPMBee(bmt.DistributedModule):
-    def __init__(self, config: CPMBeeConfig, tokenizer: CPMBeeTokenizer):
+    def __init__(self, config: CPMBeeConfig):
 
         super().__init__()
 
@@ -98,8 +98,6 @@ class CPMBee(bmt.DistributedModule):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
-
-        self.vocab_size = tokenizer.vocab_size
 
     def forward(
         self,
@@ -173,14 +171,11 @@ class CPMBee(bmt.DistributedModule):
             )
             position = torch.arange(seqlen, device=device).expand(batch, seqlen)
 
-        assert input.max() < 86580
         hidden_states = self.input_embedding(input, input_sub)
-        assert segment_bucket.max() <= 256
         position_bias = self.position_bias(position, position, segment_bucket)
 
         hidden_states = self.encoder(hidden_states, attention_mask, position_bias)
 
-        assert ext_table_ids.numel() > 0
         ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
 
         logits = self.input_embedding.projection(hidden_states, ext_table)

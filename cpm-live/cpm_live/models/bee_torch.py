@@ -21,7 +21,7 @@ from ..native_layers import Encoder, EmbeddingExt, BucketPositionBias
 from .bee import CPMBeeConfig, CPMBeeInferenceState
 
 class CPMBeeTorch(torch.nn.Module):
-    def __init__(self, config: CPMBeeConfig, tokenizer: CPMBeeTokenizer):
+    def __init__(self, config: CPMBeeConfig):
 
         super().__init__()
 
@@ -51,8 +51,6 @@ class CPMBeeTorch(torch.nn.Module):
             max_distance=config.position_bias_max_distance,
             dtype=config.dtype,
         )
-
-        self.vocab_size = tokenizer.vocab_size
 
     def forward(
         self,
@@ -126,14 +124,11 @@ class CPMBeeTorch(torch.nn.Module):
             )
             position = torch.arange(seqlen, device=device).expand(batch, seqlen)
 
-        assert input.max() < 86580
         hidden_states = self.input_embedding(input, input_sub)
-        assert segment_bucket.max() <= 256
         position_bias = self.position_bias(position, position, segment_bucket)
 
         hidden_states = self.encoder(hidden_states, attention_mask, position_bias)
 
-        assert ext_table_ids.numel() > 0
         ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
 
         logits = self.input_embedding.projection(hidden_states, ext_table)
