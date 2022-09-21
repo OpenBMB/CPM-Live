@@ -28,6 +28,7 @@ import torch
 import bmtrain as bmt
 
 
+
 class _MixedDatasetConfig(TypedDict):
     weight: float
     path: str
@@ -185,7 +186,10 @@ class _MixedDatasetBatchPacker:
         def _build_dict_tree(data: Any, depth: int, need_predict: bool) -> List[_DictTree]:
             if isinstance(data, dict):
                 ret: List[_DictTree] = []
-                for k, v in data.items():
+                curr_items = list(data.items())
+                if need_predict:
+                    np.random.shuffle(curr_items)
+                for k, v in curr_items:
                     child_info = {
                         "value": k,
                         "children": [],
