@@ -28,7 +28,6 @@ import torch
 import bmtrain as bmt
 
 
-
 class _MixedDatasetConfig(TypedDict):
     weight: float
     path: str
