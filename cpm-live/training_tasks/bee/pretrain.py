@@ -50,8 +50,7 @@ class _DictTree(TypedDict):
 
 class _PrevExtTableStates(TypedDict):
     ext_table: Dict[int, str]
-    mask_table: Dict[int, int]
-    unk_table: Dict[int, int]
+    token_id_table: Dict[str, Dict[int, int]]
 
 
 class CPMBeeBatch(TypedDict):
@@ -66,6 +65,8 @@ class CPMBeeBatch(TypedDict):
     segment_rel: NDArray[np.int32]
     spans: NDArray[np.int32]
     target: NDArray[np.int32]
+    ext_ids: NDArray[np.int32]
+    ext_sub: NDArray[np.int32]
     task_ids: NDArray[np.int32]
     task_names: List[str]
 
@@ -240,13 +241,11 @@ class _MixedDatasetBatchPacker:
         segment_bound: List[Tuple[int, int]] = []
 
         ext_table: Dict[int, str] = {}
-        mask_id_table: Dict[int, int] = {}
-        unk_id_table: Dict[int, int] = {}
+        token_id_table: Dict[str, Dict[int, int]] = {}
 
         if prev_ext_states is not None:
             ext_table = prev_ext_states["ext_table"]
-            mask_id_table = prev_ext_states["mask_table"]
-            unk_id_table = prev_ext_states["unk_table"]
+            token_id_table = prev_ext_states["token_id_table"]
 
         for seg in segments:
             tokens, ext_table = self.tokenizer.encode(seg["value"], ext_table)
@@ -255,19 +254,28 @@ class _MixedDatasetBatchPacker:
             reid_token_ids = []
             for idx in tokens:
                 if idx in ext_table:
-                    # unk or mask
+                    # unk or special token
                     token = ext_table[idx]
-                    if token.startswith("<s") and token.endswith(">"):
-                        # is mask
-                        if idx not in mask_id_table:
-                            mask_id_table[idx] = len(mask_id_table)
-                        reid_token_ids.append(self.tokenizer.mask_id)
-                        token_id_subs.append(mask_id_table[idx])
+                    if token.startswith("<") and token.endswith(">"):
+                        # special token
+                        if "_" in token:
+                            token_name = token[1:-1].split("_", maxsplit=1)[0]
+                        else:
+                            token_name = token[1:-1]
+                        token_name = "<{}>".format(token_name)
                     else:
-                        if idx not in unk_id_table:
-                            unk_id_table[idx] = len(unk_id_table)
-                        reid_token_ids.append(self.tokenizer.unk_id)
-                        token_id_subs.append(unk_id_table[idx])
+                        token_name = "<unk>"
+
+                    if token_name not in token_id_table:
+                        token_id_table[token_name] = {}
+                    if idx not in token_id_table[token_name]:
+                        token_id_table[token_name][idx] = len(token_id_table[token_name])
+                    if token_name not in self.tokenizer.encoder:
+                        raise ValueError("Invalid token {}".format(token))
+                    reid_token_ids.append(
+                        self.tokenizer.encoder[token_name]
+                    )
+                    token_id_subs.append(token_id_table[token_name][idx])
                 else:
                     reid_token_ids.append(idx)
                     token_id_subs.append(0)
@@ -284,16 +292,13 @@ class _MixedDatasetBatchPacker:
         segs = np.zeros((ids.shape[0],), dtype=np.int32)
         context = np.zeros((ids.shape[0],), dtype=np.int8)
         for i, (begin, end) in enumerate(segment_bound):
-            if segments[i]["need_predict"]:
-                context[begin] = 1  # skip the first token
-            else:
+            if not segments[i]["need_predict"]:
                 context[begin:end] = 1
             segs[begin:end] = i
 
         curr_ext_table_states: _PrevExtTableStates = {
             "ext_table": ext_table,
-            "mask_table": mask_id_table,
-            "unk_table": unk_id_table,
+            "token_id_table": token_id_table
         }
         return ids, id_subs, context, segs, segment_rel, num_segments, curr_ext_table_states
 
@@ -303,11 +308,10 @@ class _MixedDatasetBatchPacker:
         num_incontext = np.random.choice(_sample_weight.shape[0], p=_sample_weight)
         ds = config["dataset"]
         transforms = config["transforms"]
-        transform_id = np.random.choice(len(transforms) + 1)
-        if transform_id == len(transforms):
+        if len(transforms) == 0:
             transform = None
         else:
-            transform = transforms[transform_id]
+            transform = transforms[np.random.choice(len(transforms))]
 
         while True:
             inp = ds.read()
@@ -477,6 +481,9 @@ class _MixedDatasetBatchPacker:
             task_names: List[str] = list(all_task_names)
             task_name_to_id = {name: i for i, name in enumerate(task_names)}
 
+            batch_ext_table_map : Dict[Tuple[int, int], int] = {}
+            batch_ext_table_ids : List[int] = []
+            batch_ext_table_sub : List[int] = []
             for i in range(self._batch_size):
                 instance_length = self._inputs[i].shape[0]
                 rel_size = self._segment_rel[i].shape[0]
@@ -497,14 +504,23 @@ class _MixedDatasetBatchPacker:
                     task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
                     span_begin = span_end
                 length[i] = instance_length
-                tgt[i, 0 : instance_length - 1] = np.where(
-                    context[i, 1:instance_length] > 0, -100, inputs[i, 1:instance_length]
-                )
-            tgt[:, :-1] = np.where(
-                tgt[:, :-1] == self.tokenizer.unk_id,
-                self.tokenizer.vocab_size + inputs_sub[:, 1:],
-                tgt[:, :-1],
-            )
+                
+                for j in range(instance_length):
+                    idx, idx_sub = self._inputs[i][j], self._inputs_sub[i][j]
+                    tgt_idx = idx
+                    if idx_sub > 0:
+                        # need to be in ext table
+                        if (idx, idx_sub) not in batch_ext_table_map:
+                            batch_ext_table_map[(idx, idx_sub)] = len(batch_ext_table_map)
+                            batch_ext_table_ids.append(idx)
+                            batch_ext_table_sub.append(idx_sub)
+                        tgt_idx = batch_ext_table_map[(idx, idx_sub)] + self.tokenizer.vocab_size
+                    if context[i, j] == 0 and idx != self.tokenizer.bos_id and j > 1:
+                        tgt[i, j - 1] = tgt_idx
+            if len(batch_ext_table_map)  == 0:
+                # placeholder
+                batch_ext_table_ids.append(0)
+                batch_ext_table_sub.append(1)
 
             self._inputs = self._inputs[self._batch_size :]
             self._inputs_sub = self._inputs_sub[self._batch_size :]
@@ -528,6 +544,8 @@ class _MixedDatasetBatchPacker:
                 "segment_rel": segment_rel,
                 "spans": spans,
                 "target": tgt,
+                "ext_ids": np.array(batch_ext_table_ids, dtype=np.int32),
+                "ext_sub": np.array(batch_ext_table_sub, dtype=np.int32),
                 "task_ids": task_ids,
                 "task_names": task_names,
             }

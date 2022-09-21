@@ -152,6 +152,8 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
             input_segment_rel = torch.from_numpy(data["segment_rel"]).cuda().to(torch.int32)
             input_span = torch.from_numpy(data["spans"]).cuda().to(torch.int32)
             targets = torch.from_numpy(data["target"]).cuda().to(torch.int32)
+            ext_table_ids = torch.from_numpy(data["ext_ids"]).cuda().to(torch.int32)
+            ext_table_sub = torch.from_numpy(data["ext_sub"]).cuda().to(torch.int32)
             task_ids = torch.from_numpy(data["task_ids"]).cuda().to(torch.int32)
             task_names = data["task_names"]
 
@@ -174,6 +176,8 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 input_segment_rel_offset,
                 input_segment_rel,
                 input_span,
+                ext_table_ids,
+                ext_table_sub
             )
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
             global_loss = bmt.sum_loss(loss).item()

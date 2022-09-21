@@ -1,5 +1,5 @@
 {
-    "vocab_size": 86798,
+    "vocab_size": 86580,
     "dim_model": 4096,
     "dim_ff" : 10240,
     "num_layers" : 48,

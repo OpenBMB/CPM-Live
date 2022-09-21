@@ -13,61 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Tuple, TypedDict
+from typing import Optional
 import torch
 
 from ..tokenizers.bee import CPMBeeTokenizer
-from ..utils import Config
-from ..layers import Encoder, EmbeddingExt, BucketPositionBias
-import bmtrain as bmt
+from ..native_layers import Encoder, EmbeddingExt, BucketPositionBias
+from .bee import CPMBeeConfig, CPMBeeInferenceState
 
-
-class CPMBeeInferenceState(TypedDict):
-    buffer_position : torch.Tensor
-    buffer_context : torch.Tensor
-    buffer_sample_ids : torch.Tensor
-    buffer_num_segments : torch.Tensor
-    buffer_segments : torch.Tensor
-    buffer : List[Tuple[torch.Tensor, torch.Tensor]]
-
-class CPMBeeConfig(Config):
-    def __init__(
-        self,
-        vocab_size=30720,
-        dim_model=4096,
-        num_heads=64,
-        dim_head=64,
-        dim_ff=10240,
-        num_layers=32,
-        dropout_p=0.0,
-        position_bias_num_buckets=256,
-        position_bias_num_segment_buckets=256,
-        position_bias_max_distance=2048,
-        eps=1e-6,
-        half: bool = True,
-        mask_modules: Optional[List[Tuple[bool, bool]]] = None,
-    ):
-
-        super().__init__()
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.dim_head = dim_head
-        self.dim_ff = dim_ff
-        self.num_layers = num_layers
-        self.position_bias_num_buckets = position_bias_num_buckets
-        self.position_bias_num_segment_buckets = position_bias_num_segment_buckets
-        self.position_bias_max_distance = position_bias_max_distance
-        self.dropout_p = dropout_p
-        self.eps = eps
-        if half:
-            self.dtype = torch.half
-        else:
-            self.dtype = torch.float
-        self.vocab_size = vocab_size
-        self.mask_modules = mask_modules
-
-
-class CPMBee(bmt.DistributedModule):
+class CPMBeeTorch(torch.nn.Module):
     def __init__(self, config: CPMBeeConfig, tokenizer: CPMBeeTokenizer):
 
         super().__init__()
