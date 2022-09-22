@@ -24,7 +24,7 @@ from ...dataset import DistributedDataset
 from ...tokenizers import CPMBeeTokenizer
 import numpy as np
 import time
-from numpy._typing import NDArray
+from numpy.typing import NDArray
 import torch
 import bmtrain as bmt
 
