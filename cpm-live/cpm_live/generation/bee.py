@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from .utils import BeamHypotheses, repetition_penalty, pad
 from ..tokenizers.bee import CPMBeeTokenizer
 from ..models.bee import CPMBee
-from training_tasks.bee.pretrain import _MixedDatasetBatchPacker
+from ..training_tasks.bee.pretrain import _MixedDatasetBatchPacker
 
 
 class CPMBeeGeneration:
@@ -38,7 +38,7 @@ class CPMBeeGeneration:
             segment_rel,
             n_segments,
             table_states,
-        ) = self._packer.data_to_id(data)
+        ) = self._packer.data_to_id(data, shuffle_answer=False)
 
         sub_ans_map: Dict[int, int] = {}
         for fake_id, token_sub in table_states["token_id_table"]["<ans>"].items():
@@ -221,13 +221,18 @@ class CPMBeeGeneration:
             ext_table = other_info[sent_id]["ext_table"]
             data = data_list[sent_id]
             for ans_id, token_ids in ans_result_map.items():
+                if token_ids[-1] == self.tokenizer.eos_id:
+                    token_ids = token_ids[:-1]
                 text = self.tokenizer.decode(token_ids, ext_table)
                 path = answer_placeholders[ans_id - 1]
 
-                p = data["<ans>"]
-                for part in path[:-1]:
-                    p = p[part]
-                p[path[-1]] = text
+                if len(path) > 0:
+                    p = data["<ans>"]
+                    for part in path[:-1]:
+                        p = p[part]
+                    p[path[-1]] = text
+                else:
+                    data["<ans>"] = text
             for ans_id in range(len(answer_placeholders)):
                 if (ans_id + 1) not in ans_result_map:
                     path = answer_placeholders[ans_id]
@@ -341,7 +346,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
 
         # generated hypotheses
         generated_hyps = [
-            BeamHypotheses(beam_size, max_length, length_penalty=0, early_stopping=False)
+            BeamHypotheses(beam_size, max_length, length_penalty=1, early_stopping=False)
             for _ in range(batch_size)
         ]
 
@@ -439,7 +444,6 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                 repetition_window,
             )
             scores = F.log_softmax(logits, dim=-1)
-
             next_scores = scores + beam_scores[:, None].expand_as(
                 scores
             )  # (batch_size * beam_size, vocab_size)
@@ -449,7 +453,6 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
             next_scores, next_words = torch.topk(
                 next_scores, 2 * beam_size, dim=1, largest=True, sorted=True
             )
-
             assert next_scores.size() == next_words.size() == (batch_size, 2 * beam_size)
             next_beam_states = []
 
@@ -495,7 +498,13 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                         and (curr_info["idx"] + 1 == len(other_info[sent_id]["predict_segments"]))
                     ) or i == max_length:
                         generated_hyps[sent_id].add(
-                            beam_states[sent_id][beam_id]["ans"],
+                            beam_states[sent_id][beam_id]["ans"]
+                            + [
+                                (
+                                    word_id,
+                                    other_info[sent_id]["predict_segments"][curr_info["idx"]][1],
+                                )
+                            ],
                             value.item(),
                         )
                     elif word_id == self.tokenizer.eos_id:
@@ -503,7 +512,15 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                             (
                                 {
                                     "idx": curr_info["idx"] + 1,
-                                    "ans": curr_info["ans"],
+                                    "ans": curr_info["ans"]
+                                    + [
+                                        (
+                                            word_id,
+                                            other_info[sent_id]["predict_segments"][
+                                                curr_info["idx"]
+                                            ][1],
+                                        )
+                                    ],
                                     "nx_token_id": self.tokenizer.bos_id,
                                     "nx_token_sub": 0,
                                     "nx_segment_id": other_info[sent_id]["predict_segments"][

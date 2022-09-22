@@ -25,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
 from cpm_live.utils import allgather_objects
-from training_tasks.bee import MixedDataset
+from cpm_live.training_tasks.bee import MixedDataset
 
 
 def get_tokenizer(args):
