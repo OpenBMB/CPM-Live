@@ -40,7 +40,9 @@ class _MixedDatasetConfig(TypedDict):
     lines: int
     dataset: DistributedDataset
 
-CPMBeeInputType = Union[str, Dict[str, 'CPMBeeInputType']]
+
+CPMBeeInputType = Union[str, Dict[str, "CPMBeeInputType"]]
+
 
 class _DictTree(TypedDict):
     value: str
@@ -97,7 +99,9 @@ class _MixedDatasetBatchPacker:
         self._spans: List[List[int]] = []
         self._task_ids: List[List[str]] = []
 
-    def apply_transform(self, data: CPMBeeInputType, transform: Optional[Dict[str, Any]]) -> CPMBeeInputType:
+    def apply_transform(
+        self, data: CPMBeeInputType, transform: Optional[Dict[str, Any]]
+    ) -> CPMBeeInputType:
         if transform is None:
             return data
 
@@ -118,7 +122,9 @@ class _MixedDatasetBatchPacker:
 
         expanded_mapping_list: List[Tuple[str, Any]] = []
 
-        def _expand_mapping(data: CPMBeeInputType, stars: List[str], path: List[str], target: List[str]):
+        def _expand_mapping(
+            data: CPMBeeInputType, stars: List[str], path: List[str], target: List[str]
+        ):
             if len(path) == 0:
                 num_stars = 0
                 for it in target:
@@ -189,7 +195,9 @@ class _MixedDatasetBatchPacker:
 
         segments = [root]
 
-        def _build_dict_tree(data: CPMBeeInputType, depth: int, need_predict: bool) -> List[_DictTree]:
+        def _build_dict_tree(
+            data: CPMBeeInputType, depth: int, need_predict: bool
+        ) -> List[_DictTree]:
             if isinstance(data, dict):
                 ret_list: List[_DictTree] = []
                 curr_items = list(data.items())
@@ -198,7 +206,7 @@ class _MixedDatasetBatchPacker:
                     np.random.shuffle(access_idx)
                     curr_items = [curr_items[idx] for idx in access_idx]
                 for k, v in curr_items:
-                    child_info : _DictTree = {
+                    child_info: _DictTree = {
                         "value": k,
                         "children": [],
                         "depth": depth,
@@ -566,8 +574,8 @@ class _MixedDatasetBatchPacker:
 
 class _MixedDatasetConfigMananger:
     def __init__(self, config_path: str) -> None:
-        self._config_path : str = config_path
-        self._config : Union[List[_MixedDatasetConfig], None] = None
+        self._config_path: str = config_path
+        self._config: Union[List[_MixedDatasetConfig], None] = None
         self._last_m = 0
 
     def changed(self):
@@ -864,7 +872,7 @@ class MixedDataset:
         return missing
 
     def get(self) -> CPMBeeBatch:
-        ret : CPMBeeBatch = self._q_data.get() # type: ignore
+        ret: CPMBeeBatch = self._q_data.get()  # type: ignore
         if not isinstance(ret, dict):
             raise RuntimeError("Invalid data {}".format(ret))
         return ret
