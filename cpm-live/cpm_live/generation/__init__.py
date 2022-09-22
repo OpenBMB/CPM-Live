@@ -1,1 +1,1 @@
-from .ant import CPMAntBeamSearch, CPMAntRandomSampling
+from .ant import CPMAntBeamSearch, CPMAntRandomSampling, CPMAntGeneration
