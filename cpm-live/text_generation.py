@@ -39,7 +39,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         prompt_length=config.prompt_length
     )
-    inference_results = beam_search.generate(texts, max_length=100)
+    inference_results = beam_search.generate(texts, max_length=100, repetition_coefficient=1.2)
     for res in inference_results:
         print(res)
 
