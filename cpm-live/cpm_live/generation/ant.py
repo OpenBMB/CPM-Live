@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from .generation_utils import BeamHypotheses, repetition_penalty, top_k_top_p_filtering
+from .generation_utils import BeamHypotheses, apply_repetition_penalty, top_k_top_p_filtering
 from ..utils import pad
 
 
@@ -54,7 +54,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
         model_inputs,
         beam_size=3,
         max_length=100,
-        repetition_coefficient=1.0,
+        repetition_penalty=1.0,
         repetition_window=None,
         **kwargs
     ):
@@ -64,7 +64,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
             model_inputs (dict): input ids.
             beam_size (int, optional, defaults to 3): beam size of beam search.
             generate_length (int, optional, defaults to 100): maximum generation length.
-            repetition_coefficient (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
+            repetition_penalty (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
         """  # noqa: E501
         # generate_length + 1 for EOS token
@@ -164,12 +164,12 @@ class CPMAntBeamSearch(CPMAntGeneration):
                 logits[:, self.tokenizer.eos_id] = -float("inf")
                 logits[:, self.tokenizer.newline_id] = -float("inf")
 
-            repetition_penalty(
+            apply_repetition_penalty(
                 logits,
                 batch_size,
                 beam_size,
                 input,
-                repetition_coefficient,
+                repetition_penalty,
                 pred_start_index,
                 input.size(-1) - 1,
                 repetition_window,
@@ -283,7 +283,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
         top_k=0,
         top_p=0.9,
         temperature=0.9,
-        repetition_coefficient=1.0,
+        repetition_penalty=1.0,
         repetition_window=None,
         **kwargs
     ):
@@ -295,7 +295,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
             top_k (int, optional, defaults to 0): keep only top k tokens with highest probability. 0 means keeping all tokens.
             top_p (int, optional, defaults to 0.9): keep the top tokens with cumulative probability >= top_p.
             temperature (int, optional, defaults to 0.9): the value that can cool down the logits distribution.
-            repetition_coefficient (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
+            repetition_penalty (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
         """  # noqa: E501
         # generate_length + 1 for EOS token
@@ -341,12 +341,12 @@ class CPMAntRandomSampling(CPMAntGeneration):
                 logits[:, self.tokenizer.eos_id] = -float("inf")
                 logits[:, self.tokenizer.newline_id] = -float("inf")
 
-            repetition_penalty(
+            apply_repetition_penalty(
                 logits,
                 batch_size,
                 1,
                 input,
-                repetition_coefficient,
+                repetition_penalty,
                 pred_start_index,
                 input.size(-1) - 1,
                 repetition_window,
@@ -381,4 +381,5 @@ class CPMAntRandomSampling(CPMAntGeneration):
             )  # segment id always the same as the previous token
             span = torch.cat([span, span[:, -1:]], dim=-1)
 
-        return results
+        result_text = list(map(self.tokenizer.decode, results))
+        return result_text
