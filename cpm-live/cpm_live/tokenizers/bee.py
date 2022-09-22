@@ -64,7 +64,7 @@ class CPMBeeTokenizer(object):
         self.encoder[self.space_token] = self.encoder["</_>"]
         del self.encoder["</n>"]
         del self.encoder["</_>"]
-
+        
         self.decoder = {v: k for k, v in self.encoder.items()}
         self._special_tokens = {
             k: v for k, v in self.encoder.items() if k.startswith("<") and k.endswith(">")
