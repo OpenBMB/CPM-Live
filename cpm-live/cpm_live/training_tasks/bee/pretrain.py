@@ -18,7 +18,8 @@ import json
 import multiprocessing
 import os
 from queue import Empty
-from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing_extensions import TypedDict
 from ...dataset import DistributedDataset
 from ...tokenizers import CPMBeeTokenizer
 import numpy as np
@@ -39,6 +40,7 @@ class _MixedDatasetConfig(TypedDict):
     lines: int
     dataset: DistributedDataset
 
+CPMBeeInputType = Union[str, Dict[str, 'CPMBeeInputType']]
 
 class _DictTree(TypedDict):
     value: str
@@ -95,7 +97,7 @@ class _MixedDatasetBatchPacker:
         self._spans: List[List[int]] = []
         self._task_ids: List[List[str]] = []
 
-    def apply_transform(self, data: Dict[str, Any], transform: Optional[Dict[str, Any]]):
+    def apply_transform(self, data: CPMBeeInputType, transform: Optional[Dict[str, Any]]) -> CPMBeeInputType:
         if transform is None:
             return data
 
@@ -116,7 +118,7 @@ class _MixedDatasetBatchPacker:
 
         expanded_mapping_list: List[Tuple[str, Any]] = []
 
-        def _expand_mapping(data: Any, stars: List[str], path: List[str], target: List[str]):
+        def _expand_mapping(data: CPMBeeInputType, stars: List[str], path: List[str], target: List[str]):
             if len(path) == 0:
                 num_stars = 0
                 for it in target:
@@ -187,14 +189,16 @@ class _MixedDatasetBatchPacker:
 
         segments = [root]
 
-        def _build_dict_tree(data: Any, depth: int, need_predict: bool) -> List[_DictTree]:
+        def _build_dict_tree(data: CPMBeeInputType, depth: int, need_predict: bool) -> List[_DictTree]:
             if isinstance(data, dict):
-                ret: List[_DictTree] = []
+                ret_list: List[_DictTree] = []
                 curr_items = list(data.items())
                 if need_predict and shuffle_answer:
-                    np.random.shuffle(curr_items)
+                    access_idx = np.arange(len(curr_items))
+                    np.random.shuffle(access_idx)
+                    curr_items = [curr_items[idx] for idx in access_idx]
                 for k, v in curr_items:
-                    child_info = {
+                    child_info : _DictTree = {
                         "value": k,
                         "children": [],
                         "depth": depth,
@@ -206,8 +210,8 @@ class _MixedDatasetBatchPacker:
                         v, depth + 1, need_predict or (depth == 1 and k == "<ans>")
                     )  # elements in <root>.<ans>
 
-                    ret.append(child_info)
-                return ret
+                    ret_list.append(child_info)
+                return ret_list
             else:
                 assert isinstance(data, str), "Invalid data {}".format(data)
                 ret: _DictTree = {
@@ -414,7 +418,7 @@ class _MixedDatasetBatchPacker:
         for i in range(len(self._inputs)):
             space = self._max_length - self._inputs[i].shape[0]
             if input_ids.shape[0] <= space:
-                if best_fit is None:
+                if best_fit_space is None:
                     best_fit = i
                     best_fit_space = space
                 elif best_fit_space > space:
@@ -562,8 +566,8 @@ class _MixedDatasetBatchPacker:
 
 class _MixedDatasetConfigMananger:
     def __init__(self, config_path: str) -> None:
-        self._config_path = config_path
-        self._config = None
+        self._config_path : str = config_path
+        self._config : Union[List[_MixedDatasetConfig], None] = None
         self._last_m = 0
 
     def changed(self):
@@ -584,6 +588,8 @@ class _MixedDatasetConfigMananger:
     def get_config(self) -> List[_MixedDatasetConfig]:
         if self._config is None:
             if not self.changed():
+                raise RuntimeError("Failed to load config")
+            if self._config is None:
                 raise RuntimeError("Failed to load config")
         return self._config
 
@@ -858,7 +864,7 @@ class MixedDataset:
         return missing
 
     def get(self) -> CPMBeeBatch:
-        ret = self._q_data.get()
+        ret : CPMBeeBatch = self._q_data.get() # type: ignore
         if not isinstance(ret, dict):
             raise RuntimeError("Invalid data {}".format(ret))
         return ret
