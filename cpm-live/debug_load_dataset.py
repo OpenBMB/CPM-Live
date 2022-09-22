@@ -1,4 +1,4 @@
-from training_tasks.bee import MixedDataset
+from cpm_live.training_tasks.bee import MixedDataset
 from cpm_live.tokenizers import CPMBeeTokenizer
 import os
 import torch
