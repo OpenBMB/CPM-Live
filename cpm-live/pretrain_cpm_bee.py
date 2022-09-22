@@ -24,7 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
-from cpm_live.utils import allgather_objects
+from cpm_live.utils import allgather_objects, LogManager
 from cpm_live.training_tasks.bee import MixedDataset
 
 
@@ -118,6 +118,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
         if not os.path.exists(args.log_dir):
             os.makedirs(args.log_dir)
         writer = SummaryWriter(log_dir=args.log_dir)
+        log_mgr = LogManager("logs/train")
 
     global_token_pass = 0.0
     global_world_size = bmt.world_size()
@@ -241,24 +242,21 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
 
             train_info = {
                 "time": tim_usage["init"],
-                "iter": iteration,
+                "iteration": iteration,
                 "loss": global_loss,
                 "lr": lr_scheduler.current_lr,
-                "lr scale": int(optimizer.scale),
-                "time usage": tim_usage,
-                "mem usage": mem_usage,
-                "avg time (s)": avg_time,
-                "token/max": local_total_rate,
-                "token pass": global_token_pass,
-                "throughout (token/s)": args.max_length
-                * args.batch_size
-                * local_total_rate
-                / avg_time,
+                "lr_scale": int(optimizer.scale),
+                "time_usage": tim_usage,
+                "mem_usage": mem_usage,
+                "avg_time": avg_time,
+                "token_max": local_total_rate,
+                "token_pass": global_token_pass,
+                "throughout": args.max_length * args.batch_size * local_total_rate / avg_time,
                 "grad_norm": grad_norm.item(),
-                "mask/max": ((targets >= 0).sum(-1).float().mean() / args.max_length).item(),
+                "mask_max": ((targets >= 0).sum(-1).float().mean() / args.max_length).item(),
                 "num_gpus": global_world_size,
+                "task_loss": task_loss_map,
             }
-            train_info["task_loss"] = task_loss_map
 
             bmt.print_rank(
                 (
@@ -291,6 +289,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
 
             # write log here
             if bmt.rank() == 0:
+                log_mgr.write(**train_info)
                 writer.add_scalar("Loss/train", global_loss, iteration)
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
