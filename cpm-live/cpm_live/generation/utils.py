@@ -58,7 +58,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("inf")
     return logits
 
 
-def repetition_penalty(
+def apply_repetition_penalty(
     logits,
     batch_size,
     num_beams,
