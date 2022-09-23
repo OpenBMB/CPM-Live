@@ -2,33 +2,6 @@ import torch
 import torch.nn.functional as F
 
 
-def pad(items, key, padding_value=0):
-    batch_size = len(items)
-    shape = items[0][key].shape
-    dim = len(shape)
-    assert dim <= 3
-    max_length = max(item[key].shape[-1] for item in items)
-    min_length = min(item[key].shape[-1] for item in items)
-    dtype = items[0][key].dtype
-
-    if dim == 1:
-        return torch.cat([item[key] for item in items], dim=0)
-    elif dim == 2:
-        if max_length == min_length:
-            return torch.cat([item[key] for item in items], dim=0)
-        tensor = torch.zeros((batch_size, max_length), dtype=dtype) + padding_value
-    else:
-        tensor = torch.zeros((batch_size, max_length, shape[-1]), dtype=dtype) + padding_value
-
-    for i, item in enumerate(items):
-        if dim == 2:
-            tensor[i, -len(item[key][0]) :] = item[key][0].clone()
-        elif dim == 3:
-            tensor[i, -len(item[key][0]) :, :] = item[key][0].clone()
-
-    return tensor
-
-
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("inf")):
     # This function has been mostly taken from huggingface conversational ai code at
     # https://medium.com/huggingface/how-to-build-a-state-of-the-art-conversational-ai-with-transfer-learning-2d818ac26313

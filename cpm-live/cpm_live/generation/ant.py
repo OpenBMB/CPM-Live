@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from .utils import BeamHypotheses, apply_repetition_penalty, pad, top_k_top_p_filtering
+from .generation_utils import BeamHypotheses, apply_repetition_penalty, top_k_top_p_filtering
+from ..utils import pad
 
 
 class CPMAntGeneration:
@@ -34,16 +35,14 @@ class CPMAntGeneration:
         keys = set(input_tensors[0].keys())
         padded = {}
         for key in keys:
-            padded[key] = pad(input_tensors, key).cuda()
+            padded[key] = pad(input_tensors, key, padding_side='left').cuda()
         return padded
 
     def generate(self, text_list, **kwargs):
         model_inputs = self._process_texts(text_list)
         with torch.inference_mode():
-            result_ids = self._decode(model_inputs, **kwargs)
-
-        result_text = list(map(self.tokenizer.decode, result_ids))
-        return result_text
+            result = self._decode(model_inputs, **kwargs)
+        return result
 
     def _decode(self, model_inputs, **kwargs):
         raise NotImplementedError("_decode is not implemented.")
@@ -57,6 +56,7 @@ class CPMAntBeamSearch(CPMAntGeneration):
         max_length=100,
         repetition_penalty=1.0,
         repetition_window=None,
+        **kwargs
     ):
         """
         Beam search
@@ -271,7 +271,8 @@ class CPMAntBeamSearch(CPMAntGeneration):
             best_hyp = max(hypotheses.hyp, key=lambda x: x[0])[1]
             results.append(best_hyp)
 
-        return results
+        result_text = list(map(self.tokenizer.decode, results))
+        return result_text
 
 
 class CPMAntRandomSampling(CPMAntGeneration):
@@ -284,6 +285,7 @@ class CPMAntRandomSampling(CPMAntGeneration):
         temperature=0.9,
         repetition_penalty=1.0,
         repetition_window=None,
+        **kwargs
     ):
         """
         Top-k and top-p sampling.
@@ -379,4 +381,5 @@ class CPMAntRandomSampling(CPMAntGeneration):
             )  # segment id always the same as the previous token
             span = torch.cat([span, span[:, -1:]], dim=-1)
 
-        return results
+        result_text = list(map(self.tokenizer.decode, results))
+        return result_text
