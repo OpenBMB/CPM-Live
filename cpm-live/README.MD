@@ -113,46 +113,7 @@ If you want to know how we convert the data to binary files, run the following c
 $ bash scripts/preprocess_dataset.sh
 ```
 
-If you want to use our models on downstream tasks, we provide an example code on adapting CPM-Ant to the summarization task. Here, we choose the soft prompt corresponding to the `lm` task and organize the input data as follows:
-
-```python
-from cpm_live.tokenizers import CPMAntTokenizer
-import numpy as np
-
-input_text = "我今天去了学校"
-target_text = "去学校"
-
-tokenizer = CPMAntTokenizer()
-prompt_length = config.prompt_length
-task_id = 1  # lm task
-
-# convert input and target text to model input
-prompt_ids = [x + prompt_length * task_id for x in range(prompt_length)]
-text_ids = [tokenizer.bos_id] + tokenizer.encode(input_text + "[摘要]")
-target_ids =  tokenizer.encode(target_text) + [tokenizer.eos_id]
-
-# For MLM:
-#   input_ids:   p1 p2 ...  pN  x1   x2   x3 ...
-#   pos_ids:     0  1  ... N-1   N  N+1  N+2
-#   segment_ids: 0  0  ...   0   1    1    1  ...
-# For LM:
-#   input_ids:   p1 p2 ...  pN  x1   x2   x3 ...
-#   pos_ids:     0  1  ... N-1   N  N+1  N+2
-#   segment_ids: 0  0  ...   0   2    2    2  ...
-input_ids = prompt_ids + text_ids + target_ids
-length = len(input_ids)
-position = list(range(length))
-span = [0] * length
-context = [True] * (length - len(target_ids)) + [False] * len(target_ids)
-segment = [0] * prompt_length + [2] * (length - prompt_length)
-
-target = np.full(length, -100, dtype=np.int32)
-target[:-1] = np.where(context[1:], -100, input_ids[1:])
-```
-
-Now, convert these ids to tensors and feed them to the model for training! You can refer to [pretrain_cpm_ant.py](./pretrain_cpm_ant.py) for more details.
-
-More examples on real-world datasets are coming soon!
+If you want to use CPM-Ant on your own tasks, we provide several examples of adapting CPM-Ant to the tasks on CUGE benchmark, including summarization, dialogue, classification, re-ranking. Please check the [examples](./examples/) folder.
 
 ### Text Generation
 
