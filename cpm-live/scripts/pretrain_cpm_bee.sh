@@ -5,9 +5,11 @@ GPUS_PER_NODE=8
 NNODES=1
 MASTER_ADDR="localhost"
 MASTER_PORT=12345
+MODEL_STEPS="0"
 
 OPTS=""
 OPTS+=" --model-config config/cpm-bee-10b.json"
+OPTS+=" --dataset=datasets.json"
 OPTS+=" --batch-size 8"
 OPTS+=" --train-iters 200000"
 OPTS+=" --save-iters 500"
@@ -21,9 +23,10 @@ OPTS+=" --lr-decay-style noam"
 OPTS+=" --weight-decay 0.01"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --loss-scale 1048576"
-OPTS+=" --start-step 0"
-OPTS+=" --log-dir logs/tensorboard/cpm_live_48_4096/"
-OPTS+=" --load results/bee.pt"
+OPTS+=" --start-step ${MODEL_STEPS}"
+OPTS+=" --log-dir logs/train/"
+OPTS+=" --tensorboard logs/tensorboard/cpm_live_48_4096/"
+OPTS+=" --load results/cpm_live_checkpoint-${MODEL_STEPS}.pt"
 
 CMD="torchrun --nnodes=${NNODES} --nproc_per_node=${GPUS_PER_NODE} --rdzv_id=1 --rdzv_backend=c10d --rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} pretrain_cpm_bee.py ${OPTS}"
 
