@@ -63,7 +63,7 @@ class LogManager:
                 "mem usage": mem_usage,
                 "avg time (s)": avg_time,
                 "token/max": token_max,
-                "token pass": token_pass,
+                "token pass": token_pass + self.global_token_pass,
                 "throughout (token/s)": throughout,
                 "grad_norm": grad_norm,
                 "mask/max": mask_max,

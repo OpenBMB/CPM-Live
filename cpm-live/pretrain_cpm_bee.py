@@ -18,9 +18,7 @@ from typing import Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
-from cpm_live import get_args
-import distutils.version  # noqa: F401
-from torch.utils.tensorboard import SummaryWriter
+from cpm_live.arguments import get_args
 
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
@@ -59,7 +57,7 @@ def get_optimizer(args, model):
 
 def get_learning_rate_scheduler(args, optimizer):
     if args.lr_decay_iters is None:
-        args.lr_decay_iters = args.train_iters * args.epochs
+        args.lr_decay_iters = args.train_iters
     lr_scheduler = bmt.lr_scheduler.Noam(
         optimizer,
         start_lr=args.lr,
@@ -107,23 +105,34 @@ def add_mem_time(info, mem_usage, tim_usage):
     return mem_usage, tim_usage
 
 
-def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
+def pretrain(
+    args,
+    tokenizer: CPMBeeTokenizer,
+    model: CPMBee,
+    optimizer: bmt.optim.AdamOffloadOptimizer,
+    lr_scheduler: bmt.lr_scheduler.WarmupLRScheduler,
+):
 
     average_time = bmt.utils.AverageRecorder()
     loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
 
     start_step = args.start_step
 
-    if bmt.rank() == 0:
-        if not os.path.exists(args.log_dir):
-            os.makedirs(args.log_dir)
-        writer = SummaryWriter(log_dir=args.log_dir)
-        log_mgr = LogManager("logs/train")
+    if args.tensorboard is not None and bmt.rank() == 0:
+        from torch.utils.tensorboard import SummaryWriter
+        import distutils.version  # noqa: F401
+
+        if not os.path.exists(args.tensorboard):
+            os.makedirs(args.tensorboard)
+        writer = SummaryWriter(log_dir=args.tensorboard)
+
+    if args.log_dir is not None and bmt.rank() == 0:
+        log_mgr = LogManager(args.log_dir)
 
     global_token_pass = 0.0
     global_world_size = bmt.world_size()
     dataloader = MixedDataset(
-        "datasets.json", args.batch_size, args.max_length, tokenizer, max_depth=8
+        args.dataset, args.batch_size, args.max_length, tokenizer, max_depth=8
     )
 
     if os.path.exists(os.path.join(args.save, args.save_name + ("-%d.data.pt" % start_step))):
@@ -288,8 +297,9 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler):
                 train_info["model_inspect"] = model_inspect
 
             # write log here
-            if bmt.rank() == 0:
+            if args.log_dir is not None and bmt.rank() == 0:
                 log_mgr.write(**train_info)
+            if args.tensorboard is not None and bmt.rank() == 0:
                 writer.add_scalar("Loss/train", global_loss, iteration)
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)

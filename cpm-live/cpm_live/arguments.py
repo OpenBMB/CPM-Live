@@ -29,13 +29,7 @@ def add_training_args(parser: argparse.ArgumentParser):
 
     group = parser.add_argument_group("train", "training configurations")
 
-    group.add_argument(
-        "--base-path",
-        type=str,
-        default=None,
-        help="Path to the project base directory.",
-    )
-    group.add_argument("--dataset_name", type=str, default=None, help="Name of the dataset")
+    group.add_argument("--dataset", type=str, default="dataset.json", help="Path to dataset")
     group.add_argument(
         "--load",
         type=str,
@@ -61,10 +55,16 @@ def add_training_args(parser: argparse.ArgumentParser):
         help="number of iterations between saves",
     )
     group.add_argument(
+        "--tensorboard",
+        type=str,
+        default=None,
+        help="tensorboard directory",
+    )
+    group.add_argument(
         "--log-dir",
         type=str,
-        default="logs",
-        help="tensorboard log directory",
+        default=None,
+        help="log directory",
     )
     group.add_argument("--inspect-iters", type=int, default=1000, help="number of inspecting")
     group.add_argument("--batch-size", type=int, default=32, help="Data Loader batch size")
@@ -77,32 +77,13 @@ def add_training_args(parser: argparse.ArgumentParser):
     )
     group.add_argument("--max-length", type=int, default=512, help="max length of input")
     group.add_argument(
-        "--max-encoder-length",
-        type=int,
-        default=512,
-        help="max length of encoder input",
-    )
-    group.add_argument(
-        "--max-decoder-length",
-        type=int,
-        default=256,
-        help="max length of decoder input",
-    )
-    group.add_argument(
         "--start-step", type=int, default=0, help="step to start or continue training"
     )
     group.add_argument("--seed", type=int, default=1234, help="random seed for reproducibility")
 
-    group.add_argument(
-        "--epochs",
-        type=int,
-        default=1,
-        help="total number of epochs to train over all training runs",
-    )
-
     # Learning rate.
     group.add_argument("--lr", type=float, default=1.0e-4, help="initial learning rate")
-    group.add_argument("--weight-decay", type=float, default=1.0e-2, help="weight-decay")
+    group.add_argument("--weight-decay", type=float, default=1.0e-2, help="weight decay rate")
     group.add_argument("--loss-scale", type=float, default=65536, help="loss scale")
 
     group.add_argument(
@@ -112,26 +93,13 @@ def add_training_args(parser: argparse.ArgumentParser):
         help="percentage of data to warmup on (.01 = 1% of all " "training iters). Default 0.01",
     )
     group.add_argument(
-        "--lr-decay-iters",
-        type=int,
-        default=None,
-        help="number of iterations to decay LR over,"
-        " If None defaults to `--train-iters`*`--epochs`",
-    )
-    group.add_argument(
         "--lr-decay-style",
         type=str,
         default="noam",
         choices=["constant", "linear", "cosine", "exponential", "noam"],
         help="learning rate decay function",
     )
-    group.add_argument(
-        "--local_rank",
-        type=int,
-        default=None,
-        help="local rank passed from distributed launcher",
-    )
-
+    group.add_argument("--lr-decay-iters", type=int, default=None, help="lr decay steps")
     return parser
 
 
