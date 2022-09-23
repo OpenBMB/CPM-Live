@@ -11,7 +11,7 @@ class CPMAntGeneration:
         self.tokenizer = tokenizer
         self.prompt_length = prompt_length
 
-    def _convert_to_tensors(self, input_text, task_id=1):
+    def _convert_to_tensors(self, input_text, task_id=2):
         model_inputs = {}
         input_ids = [self.tokenizer.bos_id] + self.tokenizer.encode(input_text)
         input_ids = [j for j in input_ids if j != self.tokenizer.unk_id]
