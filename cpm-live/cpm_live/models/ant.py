@@ -78,13 +78,6 @@ class CPMAnt(bmt.DistributedModule):
             mask_modules=config.mask_modules,
         )
 
-        # self.prompt_embedding = Embedding(
-        #     vocab_size=config.prompt_types * config.prompt_length,
-        #     embedding_size=config.dim_model,
-        #     dtype=config.dtype,
-        #     init_std=0.02,
-        # )
-
         self.segment_embedding = Embedding(
             vocab_size=config.segment_types,
             embedding_size=config.dim_model,
@@ -122,13 +115,10 @@ class CPMAnt(bmt.DistributedModule):
 
         batch = input.size(0)
         seqlen = input.size(1)
-        input_prompt = input[:, : self.prompt_length].contiguous()
-        input_ids = input[:, self.prompt_length :].contiguous()
 
-        prompt_states = self.prompt_embedding(input_prompt)
-        hidden_states = self.input_embedding(input_ids)
+        hidden_states = self.input_embedding(input)
         segment_states = self.segment_embedding(segment)
-        hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
+        hidden_states = hidden_states + segment_states
 
         with torch.no_grad():
             device = input.device
@@ -168,9 +158,8 @@ class CPMAnt(bmt.DistributedModule):
         if past_key_values is None:
             past_length = 0
             past_key_values = tuple([None] * self.encoder.num_layers)
-            input_ids = input.contiguous()
 
-            hidden_states = self.input_embedding(input_ids)
+            hidden_states = self.input_embedding(input)
             segment_states = self.segment_embedding(segment)
             hidden_states = hidden_states + segment_states
 
