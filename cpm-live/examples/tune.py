@@ -251,7 +251,7 @@ class CPMAntNLGTune(CPMAntTune):
                 target_ids = target_ids[-(self.max_len - self.prompt_length) :]
 
         res["input"] = (
-            [x + self.prompt_length * self.task_id for x in range(self.prompt_length)]
+            [x + self.prompt_length * self.task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
             + input_ids
             + target_ids
         )
@@ -319,7 +319,7 @@ class CPMAntNLUTune(CPMAntTune):
                 cur_input_ids = cur_input_ids[-tr_input_length:]
 
             ids = [
-                x + self.prompt_length * self.task_id for x in range(self.prompt_length)
+                x + self.prompt_length * self.task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)
             ] + cur_input_ids
             res["input"].append(ids)
             res["length"].append(len(ids))

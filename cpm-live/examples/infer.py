@@ -26,7 +26,7 @@ class CPMAntNLUInfer(CPMAntGeneration):
 
         for option in option_list:
             ids = (
-                [x + self.prompt_length * task_id for x in range(self.prompt_length)]
+                [x + self.prompt_length * task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
                 + input_ids
                 + self.tokenizer.encode(option)
                 + self.tokenizer.encode("[是否正确]")
@@ -57,7 +57,7 @@ class CPMAntScoreInfer(CPMAntGeneration):
 
         res = {}
         ids = (
-            [x + self.prompt_length * task_id for x in range(self.prompt_length)]
+            [x + self.prompt_length * task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
             + input_ids
             + self.tokenizer.encode("[是否正确]")
         )
