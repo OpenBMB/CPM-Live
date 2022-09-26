@@ -1,4 +1,6 @@
 torch>=1.10
-bmtrain
+bmtrain==0.1.8.post1
 jieba
 tqdm
+numpy
+tensorboard

@@ -3,13 +3,8 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 GPUS_PER_NODE=8
 
 NNODES=1
-MASTER_ADDR=$(tail -n 1 /etc/hosts | cut -d: -f2 | awk '{ print $2}')
+MASTER_ADDR=localhost
 MASTER_PORT=12345
-DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
-                  --nnodes $NNODES \
-                  --node_rank $2 \
-                  --master_addr $MASTER_ADDR \
-                  --master_port $MASTER_PORT"
 
 OPTS=""
 OPTS+=" --model-config config/cpm-ant-10b.json"

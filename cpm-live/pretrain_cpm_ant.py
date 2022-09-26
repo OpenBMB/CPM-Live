@@ -427,7 +427,7 @@ def main():
     tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
 
     dataset = CPMAntPretrainDataset(
-        DistributedDataset("../data_bin_new", bmt.rank(), bmt.world_size()),
+        DistributedDataset("path/to/binary/file", bmt.rank(), bmt.world_size()),
         max_length=args.max_length - args.prompt_length,
         prompt_length=args.prompt_length,
         tokenizer=tokenizer,

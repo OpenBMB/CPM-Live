@@ -9,13 +9,16 @@
 <br>
 </p>
 
-
 </div>
 
 ## What's New
+- 2022/09/16 **[CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) is released!**
 - 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://live.openbmb.org/home).
 - 2022/05/25 The [training plan](./plans/CPM-Live训练计划书.md) for CPM-Live is now published. Look forward to the training! 
 
+## Milestones
+
+- **CPM-Ant** [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Models](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://live.openbmb.org/ant)][[Blog](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)]
 
 ## Training Plan
 Considering the scale of data and computing resources, CPM-Live will start with a 10B model training, which we named CPM-Ant. The training of CPM-Ant will start on May 29, 2022, and the entire training process is expected to last five months.
