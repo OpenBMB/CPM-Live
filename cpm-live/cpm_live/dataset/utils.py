@@ -15,7 +15,7 @@
 
 import os
 import struct
-from typing import List
+from typing import List, Optional
 from .distributed_dataset import (
     SimpleDataset,
     build_dataset,
@@ -45,7 +45,8 @@ def shuffle_dataset(
     path_tgt: str,
     block_size: int = _DEFAULT_BLOCK_SIZE,
     bucket_size: int = _DEFAULT_SHUFFLE_BUCKET_SIZE,
-    progress_bar=False,
+    progress_bar : bool = False,
+    output_name : Optional[str] = None
 ):
     """Shuffle one distributed datataset, write results to another dataset.
 
@@ -87,9 +88,11 @@ def shuffle_dataset(
         f_tmp = []
 
         # Step 2: shuffle inside bucket
+        if output_name is None:
+            output_name = "%s.shuffle" % _random_string()
         with build_dataset(
             path_tgt,
-            "%s.shuffle" % _random_string(),
+            output_name,
             block_size=block_size,
             serializer=RawSerializer(),
         ) as writer:

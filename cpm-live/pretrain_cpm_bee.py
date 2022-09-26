@@ -13,8 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import time
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
@@ -104,6 +105,41 @@ def add_mem_time(info, mem_usage, tim_usage):
     tim_usage[info] = time.time()
     return mem_usage, tim_usage
 
+class LossSpikeDetector:
+    def __init__(self, log_path : str) -> None:
+        self._last_loss : Dict[str, float] = {}
+        self._last_data : List[Any] = [None]
+        self._log_path = log_path
+    
+    def update_data(self, data : Any):
+        self._last_data.append(data)
+        if len(self._last_data) > 2:
+            self._last_data = self._last_data[-2:]
+    
+    def update_loss(self, iteration : int, loss_map : Dict[str, float]):
+        loss_spike_result = []
+        for task, loss in loss_map.items():
+            if task in self._last_loss:
+                if loss > self._last_loss[task] * 3:
+                    # loss spike!
+                    loss_spike_result.append({
+                        "prev": self._last_loss[task],
+                        "curr": loss,
+                        "task": task,
+                    })
+            self._last_loss[task] = float(loss)
+        if len(loss_spike_result) > 0:
+            self._write_log(iteration, self._last_data[-2], loss_spike_result)
+    
+    def _write_log(self, iteration : int, data : Any, result : List[Dict[str, Any]]):
+        with open(self._log_path, "a", encoding="utf-8") as fp:
+            fp.write("=" * 20)
+            fp.write("\nloss spike at {}\n".format(iteration))
+            fp.write("{}\n".format(json.dumps(result, indent=4, ensure_ascii=False)))
+            fp.write("data: \n")
+            for d in data:
+                fp.write("{}\n".format(json.dumps(d, indent=4, ensure_ascii=False)))
+            fp.write("\n\n")
 
 def pretrain(
     args,
@@ -117,6 +153,8 @@ def pretrain(
     loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
 
     start_step = args.start_step
+
+    lsd = LossSpikeDetector("debug/spile.%d.log" % bmt.rank())
 
     if args.tensorboard is not None and bmt.rank() == 0:
         from torch.utils.tensorboard import SummaryWriter
@@ -166,6 +204,7 @@ def pretrain(
             ext_table_sub = torch.from_numpy(data["ext_sub"]).cuda().to(torch.int32)
             task_ids = torch.from_numpy(data["task_ids"]).cuda().to(torch.int32)
             task_names = data["task_names"]
+            lsd.update_data(data["raw_data"])
 
             # ===========
             optimizer.zero_grad()
@@ -248,6 +287,7 @@ def pretrain(
                 global_world_size * local_total_rate * args.max_length * args.batch_size
             )
             avg_time = average_time.value
+            lsd.update_loss(iteration, task_loss_map)
 
             train_info = {
                 "time": tim_usage["init"],

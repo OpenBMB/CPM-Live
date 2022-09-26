@@ -73,6 +73,7 @@ class CPMBeeBatch(TypedDict):
     ext_sub: NDArray[np.int32]
     task_ids: NDArray[np.int32]
     task_names: List[str]
+    raw_data : List[Any]
 
 
 class _MixedDatasetBatchPacker:
@@ -98,6 +99,7 @@ class _MixedDatasetBatchPacker:
         self._segment_rel: List[NDArray[np.int32]] = []
         self._spans: List[List[int]] = []
         self._task_ids: List[List[str]] = []
+        self._raw_data : List[List[Any]] = []
 
     def apply_transform(
         self, data: CPMBeeInputType, transform: Optional[Dict[str, Any]]
@@ -331,6 +333,7 @@ class _MixedDatasetBatchPacker:
         else:
             transform = transforms[np.random.choice(len(transforms))]
 
+        raw_data = {}
         while True:
             inp = ds.read()
             inp = self.apply_transform(inp, transform)
@@ -350,6 +353,8 @@ class _MixedDatasetBatchPacker:
             input_ids = input_ids[: self._max_length]
             context = context[: self._max_length]
             segment_ids = segment_ids[: self._max_length]
+            raw_data["input"] = inp
+            raw_data["samples"] = []
             break
 
         sample_ids = np.zeros(input_ids.shape, dtype=np.int32)
@@ -376,7 +381,7 @@ class _MixedDatasetBatchPacker:
             if input_ids.shape[0] + sample_input_ids.shape[0] > self._max_length:
                 # too long, break
                 break
-
+            raw_data["samples"].append(sample)
             input_ids = np.concatenate([input_ids, sample_input_ids], axis=0)
             input_id_subs = np.concatenate([input_id_subs, sample_id_subs], axis=0)
             context = np.concatenate(
@@ -406,6 +411,7 @@ class _MixedDatasetBatchPacker:
             segment_rel,
             sample_ids,
             num_segments,
+            raw_data
         )
 
     def add_data(self, config: _MixedDatasetConfig) -> Optional[CPMBeeBatch]:
@@ -418,6 +424,7 @@ class _MixedDatasetBatchPacker:
             segment_rel,
             sample_ids,
             num_segments,
+            raw_data,
         ) = self.build_instance(config)
 
         # add to batch
@@ -444,6 +451,7 @@ class _MixedDatasetBatchPacker:
             self._segment_rel.append(segment_rel)
             self._spans.append([input_ids.shape[0]])
             self._task_ids.append([config["task_name"]])
+            self._raw_data.append([raw_data])
         else:
             # add to existing instance
             self._inputs[best_fit] = np.concatenate([self._inputs[best_fit], input_ids], axis=0)
@@ -472,6 +480,7 @@ class _MixedDatasetBatchPacker:
             )
             self._spans[best_fit].append(self._inputs[best_fit].shape[0])
             self._task_ids[best_fit].append(config["task_name"])
+            self._raw_data[best_fit].append(raw_data)
 
         if len(self._inputs) > self._batch_size:
             # pack batch
@@ -502,6 +511,7 @@ class _MixedDatasetBatchPacker:
             batch_ext_table_map: Dict[Tuple[int, int], int] = {}
             batch_ext_table_ids: List[int] = []
             batch_ext_table_sub: List[int] = []
+            raw_data_list : List[Any] = []
             for i in range(self._batch_size):
                 instance_length = self._inputs[i].shape[0]
                 rel_size = self._segment_rel[i].shape[0]
@@ -522,6 +532,7 @@ class _MixedDatasetBatchPacker:
                     task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
                     span_begin = span_end
                 length[i] = instance_length
+                raw_data_list.extend(self._raw_data[i])
 
                 for j in range(instance_length):
                     idx, idx_sub = self._inputs[i][j], self._inputs_sub[i][j]
@@ -540,6 +551,7 @@ class _MixedDatasetBatchPacker:
                 batch_ext_table_ids.append(0)
                 batch_ext_table_sub.append(1)
 
+            
             self._inputs = self._inputs[self._batch_size :]
             self._inputs_sub = self._inputs_sub[self._batch_size :]
             self._context = self._context[self._batch_size :]
@@ -550,6 +562,7 @@ class _MixedDatasetBatchPacker:
             self._segment_rel = self._segment_rel[self._batch_size :]
             self._spans = self._spans[self._batch_size :]
             self._task_ids = self._task_ids[self._batch_size :]
+            self._raw_data = self._raw_data[self._batch_size :]
             return {
                 "inputs": inputs,
                 "inputs_sub": inputs_sub,
@@ -566,6 +579,7 @@ class _MixedDatasetBatchPacker:
                 "ext_sub": np.array(batch_ext_table_sub, dtype=np.int32),
                 "task_ids": task_ids,
                 "task_names": task_names,
+                "raw_data": raw_data_list
             }
         else:
             # not ready
