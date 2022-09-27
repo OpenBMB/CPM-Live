@@ -12,56 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple
 import torch
-from ..utils import Config
 from ..layers import Encoder, Embedding, SegmentPositionEmbedding
 import bmtrain as bmt
+from .ant import CPMAntConfig
 
 
-class CPMAntConfig(Config):
-    def __init__(
-        self,
-        vocab_size=30720,
-        dim_model=4096,
-        num_heads=64,
-        dim_head=64,
-        dim_ff=10240,
-        num_layers=32,
-        dropout_p=0.0,
-        position_bias_num_buckets=512,
-        position_bias_max_distance=2048,
-        eps=1e-6,
-        half: bool = True,
-        prompt_types: int = 32,
-        prompt_length: int = 32,
-        segment_types: int = 32,
-        mask_modules: Optional[List[Tuple[bool, bool]]] = None,
-        **kwargs,
-    ):
-
-        super().__init__()
-        self.prompt_types = prompt_types
-        self.prompt_length = prompt_length
-        self.segment_types = segment_types
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.dim_head = dim_head
-        self.dim_ff = dim_ff
-        self.num_layers = num_layers
-        self.position_bias_num_buckets = position_bias_num_buckets
-        self.position_bias_max_distance = position_bias_max_distance
-        self.dropout_p = dropout_p
-        self.eps = eps
-        if half:
-            self.dtype = torch.half
-        else:
-            self.dtype = torch.float
-        self.vocab_size = vocab_size
-        self.mask_modules = mask_modules
-
-
-class CPMAnt(bmt.DistributedModule):
+class CPMAntPlus(bmt.DistributedModule):
     def __init__(self, config: CPMAntConfig):
 
         super().__init__()
@@ -78,13 +35,6 @@ class CPMAnt(bmt.DistributedModule):
             mask_modules=config.mask_modules,
         )
 
-        self.prompt_embedding = Embedding(
-            vocab_size=config.prompt_types * config.prompt_length,
-            embedding_size=config.dim_model,
-            dtype=config.dtype,
-            init_std=0.02,
-        )
-
         self.segment_embedding = Embedding(
             vocab_size=config.segment_types,
             embedding_size=config.dim_model,
@@ -93,7 +43,7 @@ class CPMAnt(bmt.DistributedModule):
         )
 
         self.input_embedding = Embedding(
-            vocab_size=config.vocab_size,
+            vocab_size=config.vocab_size + config.prompt_length * config.prompt_types,
             embedding_size=config.dim_model,
             dtype=config.dtype,
             init_std=0.02,
@@ -122,13 +72,10 @@ class CPMAnt(bmt.DistributedModule):
 
         batch = input.size(0)
         seqlen = input.size(1)
-        input_prompt = input[:, : self.prompt_length].contiguous()
-        input_ids = input[:, self.prompt_length :].contiguous()
 
-        prompt_states = self.prompt_embedding(input_prompt)
-        hidden_states = self.input_embedding(input_ids)
+        hidden_states = self.input_embedding(input)
         segment_states = self.segment_embedding(segment)
-        hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
+        hidden_states = hidden_states + segment_states
 
         with torch.no_grad():
             device = input.device
@@ -168,13 +115,10 @@ class CPMAnt(bmt.DistributedModule):
         if past_key_values is None:
             past_length = 0
             past_key_values = tuple([None] * self.encoder.num_layers)
-            input_prompt = input[:, : self.prompt_length].contiguous()
-            input_ids = input[:, self.prompt_length :].contiguous()
 
-            prompt_states = self.prompt_embedding(input_prompt)
-            hidden_states = self.input_embedding(input_ids)
+            hidden_states = self.input_embedding(input)
             segment_states = self.segment_embedding(segment)
-            hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
+            hidden_states = hidden_states + segment_states
 
         else:
             past_length = past_key_values[0][0].size(-2)

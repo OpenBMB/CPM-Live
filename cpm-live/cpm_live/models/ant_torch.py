@@ -34,6 +34,13 @@ class CPMAntTorch(torch.nn.Module):
             mask_modules=config.mask_modules,
         )
 
+        self.prompt_embedding = Embedding(
+            vocab_size=config.prompt_types * config.prompt_length,
+            embedding_size=config.dim_model,
+            dtype=config.dtype,
+            init_std=0.02,
+        )
+
         self.segment_embedding = Embedding(
             vocab_size=config.segment_types,
             embedding_size=config.dim_model,
@@ -42,7 +49,7 @@ class CPMAntTorch(torch.nn.Module):
         )
 
         self.input_embedding = Embedding(
-            vocab_size=config.vocab_size + config.prompt_length * config.prompt_types,
+            vocab_size=config.vocab_size,
             embedding_size=config.dim_model,
             dtype=config.dtype,
             init_std=0.02,
@@ -71,10 +78,13 @@ class CPMAntTorch(torch.nn.Module):
 
         batch = input.size(0)
         seqlen = input.size(1)
+        input_prompt = input[:, : self.prompt_length].contiguous()
+        input_ids = input[:, self.prompt_length :].contiguous()
 
-        hidden_states = self.input_embedding(input)
+        prompt_states = self.prompt_embedding(input_prompt)
+        hidden_states = self.input_embedding(input_ids)
         segment_states = self.segment_embedding(segment)
-        hidden_states = hidden_states + segment_states
+        hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
 
         with torch.no_grad():
             device = input.device
@@ -114,10 +124,13 @@ class CPMAntTorch(torch.nn.Module):
         if past_key_values is None:
             past_length = 0
             past_key_values = tuple([None] * self.encoder.num_layers)
+            input_prompt = input[:, : self.prompt_length].contiguous()
+            input_ids = input[:, self.prompt_length :].contiguous()
 
-            hidden_states = self.input_embedding(input)
+            prompt_states = self.prompt_embedding(input_prompt)
+            hidden_states = self.input_embedding(input_ids)
             segment_states = self.segment_embedding(segment)
-            hidden_states = hidden_states + segment_states
+            hidden_states = torch.cat([prompt_states, hidden_states], 1) + segment_states
 
         else:
             past_length = past_key_values[0][0].size(-2)

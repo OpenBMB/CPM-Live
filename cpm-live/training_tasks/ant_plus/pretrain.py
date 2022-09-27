@@ -18,7 +18,7 @@ import random
 import numpy as np
 
 
-class CPMAntPretrainDataset(data.Dataset):
+class CPMAntPlusPretrainDataset(data.Dataset):
     def __init__(self, ctx, max_length=1024, prompt_length=32, tokenizer=None):
         self.ctx = ctx
         self.max_length = max_length + prompt_length
@@ -71,10 +71,16 @@ class CPMAntPretrainDataset(data.Dataset):
                 assert segment_type[i] == 2
             elif task == 3:
                 if segment_type[i] == 2:
-                    context_inp[1:] = False
+                    context_inp[segment_begin + 1:] = False
             elif task == 4:
                 if segment_type[i] == 3:
-                    context_inp[1:] = False
+                    context_inp[segment_begin + 1:] = False
+            elif task == 5:
+                if segment_type[i] == 2:
+                    context_inp[segment_begin + 1:] = False
+            elif task == 6:
+                if segment_type[i] == 2:
+                    context_inp[segment_begin + 1:] = False
             task_inp[segment_begin:segment_end] = task
             segment_inp[segment_begin:segment_end] = segment_type[i]
             tgt[segment_begin : segment_end - 1] = np.where(
@@ -96,7 +102,8 @@ class CPMAntPretrainDataset(data.Dataset):
         tgt = np.concatenate((np.full(self.prompt_length, -100, dtype=np.int64), tgt))
         inp = np.concatenate(
             (
-                np.arange(self.prompt_length, dtype=np.int64) + self.prompt_length * global_task,
+                np.arange(self.prompt_length, dtype=np.int64) +
+                self.prompt_length * global_task + self.tokenizer.vocab_size,
                 ctx,
             )
         )

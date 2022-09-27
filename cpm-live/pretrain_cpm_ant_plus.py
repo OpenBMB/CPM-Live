@@ -10,19 +10,19 @@ from cpm_live import get_args
 import distutils.version  # noqa: F401
 from torch.utils.tensorboard import SummaryWriter
 
-from cpm_live.models import CPMAnt, CPMAntConfig
-from cpm_live.tokenizers import CPMAntTokenizer
-from training_tasks.ant import CPMAntPretrainDataset
+from cpm_live.models import CPMAntPlus, CPMAntConfig
+from cpm_live.tokenizers import CPMAntPlusTokenizer
+from training_tasks.ant_plus import CPMAntPlusPretrainDataset
 
 
 def get_tokenizer(args):
-    tokenizer = CPMAntTokenizer()
+    tokenizer = CPMAntPlusTokenizer()
     return tokenizer
 
 
 def get_model(args):
     config = CPMAntConfig.from_json_file(args.model_config)
-    model = CPMAnt(config)
+    model = CPMAntPlus(config)
     if args.load is not None:
         bmt.load(model, args.load)
     else:
@@ -425,7 +425,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
 def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-    dataset = CPMAntPretrainDataset(
+    dataset = CPMAntPlusPretrainDataset(
         DistributedDataset("path/to/binary/file", bmt.rank(), bmt.world_size()),
         max_length=args.max_length - args.prompt_length,
         prompt_length=args.prompt_length,

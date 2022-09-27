@@ -1,4 +1,9 @@
 {
     "mlm": 0,
-    "lm": 1
+    "lm": 1,
+    "mix_lm": 2,
+    "summarization": 3,
+    "qa": 4,
+    "en_zh": 5,
+    "zh_en": 6
 }

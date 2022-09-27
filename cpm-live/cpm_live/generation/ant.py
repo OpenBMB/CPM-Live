@@ -17,8 +17,7 @@ class CPMAntGeneration:
         input_ids = [j for j in input_ids if j != self.tokenizer.unk_id]
 
         model_inputs["input"] = [
-            x + self.prompt_length * task_id + self.tokenizer.vocab_size
-            for x in range(self.prompt_length)
+            x + self.prompt_length * task_id for x in range(self.prompt_length)
         ] + input_ids
         model_inputs["length"] = len(model_inputs["input"])
         model_inputs["position"] = list(range(len(model_inputs["input"])))
