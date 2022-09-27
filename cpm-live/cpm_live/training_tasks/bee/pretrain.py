@@ -748,7 +748,7 @@ def _mixed_dataset_process(
                 for c in config:
                     ds_name = _dataset_identity(c)
                     if ds_name in state_dict:
-                        c["dataset"].load_state_dict(state_dict[ds_name])
+                        c["dataset"].load_state_dict(state_dict[ds_name], strict=False)
                     else:
                         # new dataset
                         missing.append(ds_name)

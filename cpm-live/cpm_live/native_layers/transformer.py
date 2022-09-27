@@ -100,7 +100,8 @@ class Encoder(torch.nn.Module):
 
         """  # noqa: E501
         if not use_cache:
-            hidden_states = self.layers(hidden_states, attention_mask, position_bias)
+            for layer in self.layers:
+                hidden_states = layer(hidden_states, attention_mask, position_bias)    
             hidden_states = self.output_layernorm(hidden_states)
             return hidden_states
         else:

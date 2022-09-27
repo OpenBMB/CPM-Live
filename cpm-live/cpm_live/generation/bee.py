@@ -14,7 +14,7 @@ class CPMBeeGeneration:
         self.model = model
         self.tokenizer = tokenizer
 
-        self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer)
+        self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer, max_depth=8)
 
     def _convert_to_tensors(self, data: Any, in_context_samples: List[Any] = []):
         answer_placeholders = []
