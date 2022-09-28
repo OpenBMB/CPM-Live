@@ -18,7 +18,7 @@ import json
 import multiprocessing
 import os
 from queue import Empty
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from typing_extensions import TypedDict
 from ...dataset import DistributedDataset
 from ...tokenizers import CPMBeeTokenizer
@@ -27,12 +27,15 @@ import time
 from numpy.typing import NDArray
 import torch
 import bmtrain as bmt
+import importlib.machinery
+import importlib.util
+import types
 
 
 class _MixedDatasetConfig(TypedDict):
     weight: float
     path: str
-    transforms: List[Dict[str, Any]]
+    transforms: Union[List[Dict[str, Any]], str]
     task_name: str
     dataset_name: str
     incontext_weight: List[float]
@@ -57,6 +60,12 @@ class _PrevExtTableStates(TypedDict):
     token_id_table: Dict[str, Dict[int, int]]
 
 
+class _TransformFuncDict(TypedDict):
+    loader: importlib.machinery.SourceFileLoader
+    module: types.ModuleType
+    last_m: float
+
+
 class CPMBeeBatch(TypedDict):
     inputs: NDArray[np.int32]
     inputs_sub: NDArray[np.int32]
@@ -73,7 +82,161 @@ class CPMBeeBatch(TypedDict):
     ext_sub: NDArray[np.int32]
     task_ids: NDArray[np.int32]
     task_names: List[str]
-    raw_data : List[Any]
+    raw_data: List[Any]
+
+
+def rel_to_bucket(n_up: int, n_down: int, max_depth: int = 8):
+    ret = n_up * max_depth + n_down
+    if ret == 0:
+        return ret
+    else:
+        # bucket 1 is reserved for incontext samples
+        return ret + 1
+
+
+def convert_data_to_id(
+    tokenizer: CPMBeeTokenizer,
+    data: Any,
+    prev_ext_states: Optional[_PrevExtTableStates] = None,
+    shuffle_answer: bool = True,
+    max_depth: int = 8,
+):
+    root: _DictTree = {
+        "value": "<root>",
+        "children": [],
+        "depth": 0,
+        "segment_id": 0,
+        "need_predict": False,
+    }
+
+    segments = [root]
+
+    def _build_dict_tree(data: CPMBeeInputType, depth: int, need_predict: bool) -> List[_DictTree]:
+        if isinstance(data, dict):
+            ret_list: List[_DictTree] = []
+            curr_items = list(data.items())
+            if need_predict and shuffle_answer:
+                access_idx = np.arange(len(curr_items))
+                np.random.shuffle(access_idx)
+                curr_items = [curr_items[idx] for idx in access_idx]
+            for k, v in curr_items:
+                child_info: _DictTree = {
+                    "value": k,
+                    "children": [],
+                    "depth": depth,
+                    "segment_id": len(segments),
+                    "need_predict": False,  # only leaves are contexts
+                }
+                segments.append(child_info)
+                child_info["children"] = _build_dict_tree(
+                    v, depth + 1, need_predict or (depth == 1 and k == "<ans>")
+                )  # elements in <root>.<ans>
+
+                ret_list.append(child_info)
+            return ret_list
+        else:
+            assert isinstance(data, str), "Invalid data {}".format(data)
+            ret: _DictTree = {
+                "value": data,
+                "children": [],
+                "depth": depth,
+                "segment_id": len(segments),
+                "need_predict": need_predict,
+            }
+            segments.append(ret)
+            return [ret]
+
+    root["children"] = _build_dict_tree(data, 1, False)
+
+    num_segments = len(segments)
+    segment_rel = np.zeros((num_segments * num_segments,), dtype=np.int32)
+
+    def _build_segment_rel(node: _DictTree) -> List[Tuple[int, int]]:
+        ret: List[Tuple[int, int]] = [(node["segment_id"], node["depth"])]
+        for child in node["children"]:
+            sub = _build_segment_rel(child)
+            for seg_id_1, depth_1 in sub:
+                for seg_id_2, depth_2 in ret:
+                    n_up = min(depth_1 - node["depth"], max_depth - 1)
+                    n_down = min(depth_2 - node["depth"], max_depth - 1)
+                    segment_rel[seg_id_1 * num_segments + seg_id_2] = rel_to_bucket(
+                        n_up, n_down, max_depth=max_depth
+                    )
+                    segment_rel[seg_id_2 * num_segments + seg_id_1] = rel_to_bucket(
+                        n_down, n_up, max_depth=max_depth
+                    )
+            ret.extend(sub)
+        return ret
+
+    _build_segment_rel(root)
+
+    input_ids: List[int] = []
+    input_id_subs: List[int] = []
+    segment_bound: List[Tuple[int, int]] = []
+
+    ext_table: Dict[int, str] = {}
+    token_id_table: Dict[str, Dict[int, int]] = {}
+
+    if prev_ext_states is not None:
+        ext_table = prev_ext_states["ext_table"]
+        token_id_table = prev_ext_states["token_id_table"]
+
+    for seg in segments:
+        tokens, ext_table = tokenizer.encode(seg["value"], ext_table)
+
+        token_id_subs = []
+        reid_token_ids = []
+        for idx in tokens:
+            if idx in ext_table:
+                # unk or special token
+                token = ext_table[idx]
+                if token.startswith("<") and token.endswith(">"):
+                    # special token
+                    if "_" in token:
+                        token_name = token[1:-1].split("_", maxsplit=1)[0]
+                    else:
+                        token_name = token[1:-1]
+                    token_name = "<{}>".format(token_name)
+                else:
+                    token_name = "<unk>"
+
+                if token_name not in token_id_table:
+                    token_id_table[token_name] = {}
+                if idx not in token_id_table[token_name]:
+                    token_id_table[token_name][idx] = len(token_id_table[token_name])
+                if token_name not in tokenizer.encoder:
+                    raise ValueError("Invalid token {}".format(token))
+                reid_token_ids.append(tokenizer.encoder[token_name])
+                token_id_subs.append(token_id_table[token_name][idx])
+            else:
+                reid_token_ids.append(idx)
+                token_id_subs.append(0)
+        tokens = [tokenizer.bos_id] + reid_token_ids + [tokenizer.eos_id]
+        token_id_subs = [0] + token_id_subs + [0]
+        begin = len(input_ids)
+        input_ids.extend(tokens)
+        input_id_subs.extend(token_id_subs)
+        end = len(input_ids)
+        segment_bound.append((begin, end))
+
+    ids = np.array(input_ids, dtype=np.int32)
+    id_subs = np.array(input_id_subs, dtype=np.int32)
+    segs = np.zeros((ids.shape[0],), dtype=np.int32)
+    context = np.zeros((ids.shape[0],), dtype=np.int8)
+    for i, (begin, end) in enumerate(segment_bound):
+        if not segments[i]["need_predict"]:
+            context[begin:end] = 1
+        segs[begin:end] = i
+
+    curr_ext_table_states: _PrevExtTableStates = {
+        "ext_table": ext_table,
+        "token_id_table": token_id_table,
+    }
+    return ids, id_subs, context, segs, segment_rel, num_segments, curr_ext_table_states
+
+
+def _dataset_identity(c: _MixedDatasetConfig):
+    return "{}.{}".format(c["task_name"], c["dataset_name"])
 
 
 class _MixedDatasetBatchPacker:
@@ -88,6 +251,7 @@ class _MixedDatasetBatchPacker:
         self._max_length = max_length
         self._max_depth = max_depth
         self.tokenizer = tokenizer
+        self._transform_func_table: Dict[str, _TransformFuncDict] = {}
 
         self._inputs: List[NDArray[np.int32]] = []
         self._inputs_sub: List[NDArray[np.int32]] = []
@@ -99,13 +263,18 @@ class _MixedDatasetBatchPacker:
         self._segment_rel: List[NDArray[np.int32]] = []
         self._spans: List[List[int]] = []
         self._task_ids: List[List[str]] = []
-        self._raw_data : List[List[Any]] = []
+        self._raw_data: List[List[Any]] = []
 
     def apply_transform(
-        self, data: CPMBeeInputType, transform: Optional[Dict[str, Any]]
+        self,
+        data: CPMBeeInputType,
+        transform: Union[Dict[str, Any], Callable[[CPMBeeInputType], CPMBeeInputType], None],
     ) -> CPMBeeInputType:
         if transform is None:
             return data
+        if not isinstance(transform, dict):
+            # transform function
+            return transform(data)
 
         mapping_list: List[Tuple[str, str]] = []
 
@@ -173,154 +342,50 @@ class _MixedDatasetBatchPacker:
             cur[tgt[0]] = val
         return ret
 
-    def rel_to_bucket(self, n_up, n_down):
-        ret = n_up * self._max_depth + n_down
-        if ret == 0:
-            return ret
-        else:
-            # bucket 1 is reserved for incontext samples
-            return ret + 1
-
     def data_to_id(
         self,
         data: Any,
         prev_ext_states: Optional[_PrevExtTableStates] = None,
         shuffle_answer: bool = True,
     ):
-        root: _DictTree = {
-            "value": "<root>",
-            "children": [],
-            "depth": 0,
-            "segment_id": 0,
-            "need_predict": False,
-        }
+        return convert_data_to_id(
+            self.tokenizer, data, prev_ext_states, shuffle_answer, self._max_depth
+        )
 
-        segments = [root]
+    def _ensure_transform_function(
+        self, module_name: str, transform_script_path: str
+    ) -> Callable[[CPMBeeInputType], CPMBeeInputType]:
+        module_name = "cpm_live.transforms.{}".format(module_name)
+        if transform_script_path not in self._transform_func_table:
+            loader = importlib.machinery.SourceFileLoader(module_name, transform_script_path)
+            spec = importlib.util.spec_from_loader(loader.name, loader)
+            if spec is None:
+                raise RuntimeError("spec is none! {}".format(module_name))
+            mod = importlib.util.module_from_spec(spec)
+            self._transform_func_table[transform_script_path] = {
+                "loader": loader,
+                "module": mod,
+                "last_m": 0,
+            }
 
-        def _build_dict_tree(
-            data: CPMBeeInputType, depth: int, need_predict: bool
-        ) -> List[_DictTree]:
-            if isinstance(data, dict):
-                ret_list: List[_DictTree] = []
-                curr_items = list(data.items())
-                if need_predict and shuffle_answer:
-                    access_idx = np.arange(len(curr_items))
-                    np.random.shuffle(access_idx)
-                    curr_items = [curr_items[idx] for idx in access_idx]
-                for k, v in curr_items:
-                    child_info: _DictTree = {
-                        "value": k,
-                        "children": [],
-                        "depth": depth,
-                        "segment_id": len(segments),
-                        "need_predict": False,  # only leaves are contexts
-                    }
-                    segments.append(child_info)
-                    child_info["children"] = _build_dict_tree(
-                        v, depth + 1, need_predict or (depth == 1 and k == "<ans>")
-                    )  # elements in <root>.<ans>
+        transform_script_info = self._transform_func_table[transform_script_path]
+        curr_m_time = float(
+            transform_script_info["loader"].path_stats(transform_script_path)["mtime"]
+        )
+        if curr_m_time > transform_script_info["last_m"]:
+            transform_script_info["last_m"] = curr_m_time
+            transform_script_info["loader"].exec_module(transform_script_info["module"])
+        transform_func = getattr(transform_script_info["module"], "transform", None)
+        if transform_func is None:
 
-                    ret_list.append(child_info)
-                return ret_list
-            else:
-                assert isinstance(data, str), "Invalid data {}".format(data)
-                ret: _DictTree = {
-                    "value": data,
-                    "children": [],
-                    "depth": depth,
-                    "segment_id": len(segments),
-                    "need_predict": need_predict,
-                }
-                segments.append(ret)
-                return [ret]
+            def _empty_transform_func(data):
+                raise NotImplementedError(
+                    "Transform func for dataset {} not implemented".format(module_name)
+                )
 
-        root["children"] = _build_dict_tree(data, 1, False)
-
-        num_segments = len(segments)
-        segment_rel = np.zeros((num_segments * num_segments,), dtype=np.int32)
-
-        def _build_segment_rel(node: _DictTree) -> List[Tuple[int, int]]:
-            ret: List[Tuple[int, int]] = [(node["segment_id"], node["depth"])]
-            for child in node["children"]:
-                sub = _build_segment_rel(child)
-                for seg_id_1, depth_1 in sub:
-                    for seg_id_2, depth_2 in ret:
-                        n_up = min(depth_1 - node["depth"], self._max_depth - 1)
-                        n_down = min(depth_2 - node["depth"], self._max_depth - 1)
-                        segment_rel[seg_id_1 * num_segments + seg_id_2] = self.rel_to_bucket(
-                            n_up, n_down
-                        )
-                        segment_rel[seg_id_2 * num_segments + seg_id_1] = self.rel_to_bucket(
-                            n_down, n_up
-                        )
-                ret.extend(sub)
-            return ret
-
-        _build_segment_rel(root)
-
-        input_ids: List[int] = []
-        input_id_subs: List[int] = []
-        segment_bound: List[Tuple[int, int]] = []
-
-        ext_table: Dict[int, str] = {}
-        token_id_table: Dict[str, Dict[int, int]] = {}
-
-        if prev_ext_states is not None:
-            ext_table = prev_ext_states["ext_table"]
-            token_id_table = prev_ext_states["token_id_table"]
-
-        for seg in segments:
-            tokens, ext_table = self.tokenizer.encode(seg["value"], ext_table)
-
-            token_id_subs = []
-            reid_token_ids = []
-            for idx in tokens:
-                if idx in ext_table:
-                    # unk or special token
-                    token = ext_table[idx]
-                    if token.startswith("<") and token.endswith(">"):
-                        # special token
-                        if "_" in token:
-                            token_name = token[1:-1].split("_", maxsplit=1)[0]
-                        else:
-                            token_name = token[1:-1]
-                        token_name = "<{}>".format(token_name)
-                    else:
-                        token_name = "<unk>"
-
-                    if token_name not in token_id_table:
-                        token_id_table[token_name] = {}
-                    if idx not in token_id_table[token_name]:
-                        token_id_table[token_name][idx] = len(token_id_table[token_name])
-                    if token_name not in self.tokenizer.encoder:
-                        raise ValueError("Invalid token {}".format(token))
-                    reid_token_ids.append(self.tokenizer.encoder[token_name])
-                    token_id_subs.append(token_id_table[token_name][idx])
-                else:
-                    reid_token_ids.append(idx)
-                    token_id_subs.append(0)
-            tokens = [self.tokenizer.bos_id] + reid_token_ids + [self.tokenizer.eos_id]
-            token_id_subs = [0] + token_id_subs + [0]
-            begin = len(input_ids)
-            input_ids.extend(tokens)
-            input_id_subs.extend(token_id_subs)
-            end = len(input_ids)
-            segment_bound.append((begin, end))
-
-        ids = np.array(input_ids, dtype=np.int32)
-        id_subs = np.array(input_id_subs, dtype=np.int32)
-        segs = np.zeros((ids.shape[0],), dtype=np.int32)
-        context = np.zeros((ids.shape[0],), dtype=np.int8)
-        for i, (begin, end) in enumerate(segment_bound):
-            if not segments[i]["need_predict"]:
-                context[begin:end] = 1
-            segs[begin:end] = i
-
-        curr_ext_table_states: _PrevExtTableStates = {
-            "ext_table": ext_table,
-            "token_id_table": token_id_table,
-        }
-        return ids, id_subs, context, segs, segment_rel, num_segments, curr_ext_table_states
+            return _empty_transform_func
+        else:
+            return transform_func
 
     def build_instance(self, config: _MixedDatasetConfig):
         _sample_weight = np.array(config["incontext_weight"], dtype=np.float32)
@@ -328,7 +393,12 @@ class _MixedDatasetBatchPacker:
         num_incontext = np.random.choice(_sample_weight.shape[0], p=_sample_weight)
         ds = config["dataset"]
         transforms = config["transforms"]
-        if len(transforms) == 0:
+        if isinstance(transforms, str):
+            if not os.path.exists(transforms):
+                raise RuntimeError("transform script file not exists")
+            # load transform script
+            transform = self._ensure_transform_function(_dataset_identity(config), transforms)
+        elif len(transforms) == 0:
             transform = None
         else:
             transform = transforms[np.random.choice(len(transforms))]
@@ -411,7 +481,7 @@ class _MixedDatasetBatchPacker:
             segment_rel,
             sample_ids,
             num_segments,
-            raw_data
+            raw_data,
         )
 
     def add_data(self, config: _MixedDatasetConfig) -> Optional[CPMBeeBatch]:
@@ -511,7 +581,7 @@ class _MixedDatasetBatchPacker:
             batch_ext_table_map: Dict[Tuple[int, int], int] = {}
             batch_ext_table_ids: List[int] = []
             batch_ext_table_sub: List[int] = []
-            raw_data_list : List[Any] = []
+            raw_data_list: List[Any] = []
             for i in range(self._batch_size):
                 instance_length = self._inputs[i].shape[0]
                 rel_size = self._segment_rel[i].shape[0]
@@ -551,7 +621,6 @@ class _MixedDatasetBatchPacker:
                 batch_ext_table_ids.append(0)
                 batch_ext_table_sub.append(1)
 
-            
             self._inputs = self._inputs[self._batch_size :]
             self._inputs_sub = self._inputs_sub[self._batch_size :]
             self._context = self._context[self._batch_size :]
@@ -579,7 +648,7 @@ class _MixedDatasetBatchPacker:
                 "ext_sub": np.array(batch_ext_table_sub, dtype=np.int32),
                 "task_ids": task_ids,
                 "task_names": task_names,
-                "raw_data": raw_data_list
+                "raw_data": raw_data_list,
             }
         else:
             # not ready
@@ -629,6 +698,13 @@ def _mixed_dataset_process(
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    config_base_path = os.path.dirname(os.path.abspath(config_path))
+
+    def _convert_to_abs_path(transform_path: str):
+        if transform_path.startswith("/"):
+            return transform_path
+        else:
+            return os.path.join(config_base_path, transform_path)
 
     def _build_sample_weights(config: List[_MixedDatasetConfig]):
         if len(config) == 0:
@@ -642,15 +718,12 @@ def _mixed_dataset_process(
         else:
             raise RuntimeError("Empty datasets")
 
-    def _dataset_identity(c: _MixedDatasetConfig):
-        return "{}.{}".format(c["task_name"], c["dataset_name"])
-
     cfg_mgr = _MixedDatasetConfigMananger(config_path)
     config = cfg_mgr.get_config()
 
     for c in config:
         ds = DistributedDataset(
-            c["path"],
+            _convert_to_abs_path(c["path"]),
             rank,
             world_size,
         )
@@ -661,6 +734,8 @@ def _mixed_dataset_process(
             c["weight"] = 1.0
         if "transforms" not in c:
             c["transforms"] = []
+        elif isinstance(c["transforms"], str):
+            c["transforms"] = _convert_to_abs_path(c["transforms"])
         if "incontext_weight" not in c:
             c["incontext_weight"] = [1.0]
 
@@ -689,7 +764,12 @@ def _mixed_dataset_process(
                     if "weight" in c:
                         path_ds_map[_dataset_identity(c)]["weight"] = c["weight"]
                     if "transform" in c:
-                        path_ds_map[_dataset_identity(c)]["transforms"] = c["transforms"]
+                        if isinstance(c["transforms"], str):
+                            path_ds_map[_dataset_identity(c)]["transforms"] = _convert_to_abs_path(
+                                c["transforms"]
+                            )
+                        else:
+                            path_ds_map[_dataset_identity(c)]["transforms"] = c["transforms"]
                     if "incontext_weight" in c:
                         path_ds_map[_dataset_identity(c)]["incontext_weight"] = c[
                             "incontext_weight"
@@ -697,7 +777,7 @@ def _mixed_dataset_process(
                 else:
                     # new dataset
                     ds = DistributedDataset(
-                        c["path"],
+                        _convert_to_abs_path(c["path"]),
                         rank,
                         world_size,
                     )
@@ -707,6 +787,8 @@ def _mixed_dataset_process(
                         c["weight"] = 1.0
                     if "transforms" not in c:
                         c["transforms"] = []
+                    elif isinstance(c["transforms"], str):
+                        c["transforms"] = _convert_to_abs_path(c["transforms"])
                     if "incontext_weight" not in c:
                         c["incontext_weight"] = [1.0]
                     path_ds_map[_dataset_identity(c)] = c

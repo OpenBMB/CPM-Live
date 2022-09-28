@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from .utils import BeamHypotheses, repetition_penalty, pad
 from ..tokenizers.bee import CPMBeeTokenizer
 from ..models.bee import CPMBee
-from ..training_tasks.bee.pretrain import _MixedDatasetBatchPacker
+from ..training_tasks.bee.pretrain import convert_data_to_id
 
 
 class CPMBeeGeneration:
@@ -14,7 +14,7 @@ class CPMBeeGeneration:
         self.model = model
         self.tokenizer = tokenizer
 
-        self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer, max_depth=8)
+        # self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer, max_depth=8)
 
     def _convert_to_tensors(self, data: Any, in_context_samples: List[Any] = []):
         answer_placeholders = []
@@ -38,7 +38,7 @@ class CPMBeeGeneration:
             segment_rel,
             n_segments,
             table_states,
-        ) = self._packer.data_to_id(data, shuffle_answer=False)
+        ) = convert_data_to_id(self.tokenizer, data, shuffle_answer=False, max_depth=8)
 
         sub_ans_map: Dict[int, int] = {}
         for fake_id, token_sub in table_states["token_id_table"]["<ans>"].items():
@@ -83,7 +83,7 @@ class CPMBeeGeneration:
                 sample_rel,
                 n_segments,
                 table_states,
-            ) = self._packer.data_to_id(sample, table_states)
+            ) = convert_data_to_id(self.tokenizer, sample, table_states, max_depth=8)
             input_ids = np.concatenate([input_ids, sample_input_ids], axis=0)
             input_id_subs = np.concatenate([input_id_subs, sample_id_subs], axis=0)
             context = np.concatenate(

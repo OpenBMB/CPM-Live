@@ -45,8 +45,8 @@ def shuffle_dataset(
     path_tgt: str,
     block_size: int = _DEFAULT_BLOCK_SIZE,
     bucket_size: int = _DEFAULT_SHUFFLE_BUCKET_SIZE,
-    progress_bar : bool = False,
-    output_name : Optional[str] = None
+    progress_bar: bool = False,
+    output_name: Optional[str] = None,
 ):
     """Shuffle one distributed datataset, write results to another dataset.
 
