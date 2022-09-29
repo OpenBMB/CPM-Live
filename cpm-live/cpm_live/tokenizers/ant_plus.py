@@ -115,7 +115,7 @@ class CPMAntPlusTokenizer(object):
 
     def tokenize(self, text: str) -> List[Token]:
         output_tokens: List[Token] = []
-
+        text = self.escape(text)
         sentence_split = [""]
         is_escape = False
         is_special_token = False
