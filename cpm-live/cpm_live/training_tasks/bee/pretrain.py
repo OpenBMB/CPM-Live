@@ -30,6 +30,7 @@ import bmtrain as bmt
 import importlib.machinery
 import importlib.util
 import types
+import random
 
 
 class _MixedDatasetConfig(TypedDict):
@@ -64,6 +65,9 @@ class _TransformFuncDict(TypedDict):
     loader: importlib.machinery.SourceFileLoader
     module: types.ModuleType
     last_m: float
+
+
+_TransformFunction = Callable[[CPMBeeInputType, int, random.Random], CPMBeeInputType]
 
 
 class CPMBeeBatch(TypedDict):
@@ -354,7 +358,7 @@ class _MixedDatasetBatchPacker:
 
     def _ensure_transform_function(
         self, module_name: str, transform_script_path: str
-    ) -> Callable[[CPMBeeInputType], CPMBeeInputType]:
+    ) -> _TransformFunction:
         module_name = "cpm_live.transforms.{}".format(module_name)
         if transform_script_path not in self._transform_func_table:
             loader = importlib.machinery.SourceFileLoader(module_name, transform_script_path)
@@ -378,7 +382,7 @@ class _MixedDatasetBatchPacker:
         transform_func = getattr(transform_script_info["module"], "transform", None)
         if transform_func is None:
 
-            def _empty_transform_func(data):
+            def _empty_transform_func(data: CPMBeeInputType, num_sample: int, r: random.Random):
                 raise NotImplementedError(
                     "Transform func for dataset {} not implemented".format(module_name)
                 )
@@ -397,7 +401,14 @@ class _MixedDatasetBatchPacker:
             if not os.path.exists(transforms):
                 raise RuntimeError("transform script file not exists")
             # load transform script
-            transform = self._ensure_transform_function(_dataset_identity(config), transforms)
+            transform_func = self._ensure_transform_function(_dataset_identity(config), transforms)
+            seed = random.random()
+
+            def _transform(data: CPMBeeInputType):
+                r = random.Random(seed)
+                return transform_func(data, num_incontext, r)
+
+            transform = _transform
         elif len(transforms) == 0:
             transform = None
         else:
