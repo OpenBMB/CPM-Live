@@ -269,6 +269,9 @@ class _MixedDatasetBatchPacker:
         self._task_ids: List[List[str]] = []
         self._raw_data: List[List[Any]] = []
 
+    def __len__(self):
+        return len(self._inputs)
+
     def apply_transform(
         self,
         data: CPMBeeInputType,
@@ -495,6 +498,109 @@ class _MixedDatasetBatchPacker:
             raw_data,
         )
 
+    def pack_batch(self, force: bool = False) -> CPMBeeBatch:
+        # pack batch
+        if len(self._inputs) < self._batch_size:
+            if not force:
+                raise RuntimeError("Batch insufficient")
+            batch_size = len(self._inputs)
+        else:
+            batch_size = self._batch_size
+        inputs = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        inputs_sub = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        context = np.zeros((batch_size, self._max_length), dtype=np.int8)
+        sample_ids = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        segments = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        num_segments = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        segment_rel_offset = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        tgt = np.full((batch_size, self._max_length), -100, dtype=np.int32)
+
+        max_rel = 0
+        for i in range(batch_size):
+            max_rel = max(max_rel, self._segment_rel[i].shape[0])
+        segment_rel = np.zeros((batch_size, max_rel), dtype=np.int32)
+        spans = np.zeros((batch_size, self._max_length), dtype=np.int32)
+        length = np.zeros((batch_size,), dtype=np.int32)
+        task_ids = np.zeros((batch_size, self._max_length), dtype=np.int32)
+
+        all_task_names: Set[str] = set()
+        for i in range(batch_size):
+            for task_name in self._task_ids[i]:
+                all_task_names.add(task_name)
+        task_names: List[str] = list(all_task_names)
+        task_name_to_id = {name: i for i, name in enumerate(task_names)}
+
+        batch_ext_table_map: Dict[Tuple[int, int], int] = {}
+        batch_ext_table_ids: List[int] = []
+        batch_ext_table_sub: List[int] = []
+        raw_data_list: List[Any] = []
+        for i in range(batch_size):
+            instance_length = self._inputs[i].shape[0]
+            rel_size = self._segment_rel[i].shape[0]
+            inputs[i, :instance_length] = self._inputs[i]
+            inputs_sub[i, :instance_length] = self._inputs_sub[i]
+            context[i, :instance_length] = self._context[i]
+            sample_ids[i, :instance_length] = self._sample_ids[i]
+            segments[i, :instance_length] = self._segments[i]
+            num_segments[i, :instance_length] = self._num_segments[i]
+            segment_rel_offset[i, :instance_length] = self._segment_rel_offset[i]
+            segment_rel[i, :rel_size] = self._segment_rel[i]
+
+            span_begin = 0
+            for span_id, (span_end, task_name) in enumerate(zip(self._spans[i], self._task_ids[i])):
+                spans[i, span_begin:span_end] = span_id
+                task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
+                span_begin = span_end
+            length[i] = instance_length
+            raw_data_list.extend(self._raw_data[i])
+
+            for j in range(instance_length):
+                idx, idx_sub = self._inputs[i][j], self._inputs_sub[i][j]
+                tgt_idx = idx
+                if idx_sub > 0:
+                    # need to be in ext table
+                    if (idx, idx_sub) not in batch_ext_table_map:
+                        batch_ext_table_map[(idx, idx_sub)] = len(batch_ext_table_map)
+                        batch_ext_table_ids.append(idx)
+                        batch_ext_table_sub.append(idx_sub)
+                    tgt_idx = batch_ext_table_map[(idx, idx_sub)] + self.tokenizer.vocab_size
+                if context[i, j] == 0 and idx != self.tokenizer.bos_id and j > 1:
+                    tgt[i, j - 1] = tgt_idx
+        if len(batch_ext_table_map) == 0:
+            # placeholder
+            batch_ext_table_ids.append(0)
+            batch_ext_table_sub.append(1)
+
+        self._inputs = self._inputs[batch_size:]
+        self._inputs_sub = self._inputs_sub[batch_size:]
+        self._context = self._context[batch_size:]
+        self._sample_ids = self._sample_ids[batch_size:]
+        self._segments = self._segments[batch_size:]
+        self._num_segments = self._num_segments[batch_size:]
+        self._segment_rel_offset = self._segment_rel_offset[batch_size:]
+        self._segment_rel = self._segment_rel[batch_size:]
+        self._spans = self._spans[batch_size:]
+        self._task_ids = self._task_ids[batch_size:]
+        self._raw_data = self._raw_data[batch_size:]
+        return {
+            "inputs": inputs,
+            "inputs_sub": inputs_sub,
+            "length": length,
+            "context": context > 0,
+            "sample_ids": sample_ids,
+            "num_segments": num_segments,
+            "segment_ids": segments,
+            "segment_rel_offset": segment_rel_offset,
+            "segment_rel": segment_rel,
+            "spans": spans,
+            "target": tgt,
+            "ext_ids": np.array(batch_ext_table_ids, dtype=np.int32),
+            "ext_sub": np.array(batch_ext_table_sub, dtype=np.int32),
+            "task_ids": task_ids,
+            "task_names": task_names,
+            "raw_data": raw_data_list,
+        }
+
     def add_data(self, config: _MixedDatasetConfig) -> Optional[CPMBeeBatch]:
         (
             input_ids,
@@ -564,103 +670,7 @@ class _MixedDatasetBatchPacker:
             self._raw_data[best_fit].append(raw_data)
 
         if len(self._inputs) > self._batch_size:
-            # pack batch
-            inputs = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            inputs_sub = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            context = np.zeros((self._batch_size, self._max_length), dtype=np.int8)
-            sample_ids = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            segments = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            num_segments = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            segment_rel_offset = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            tgt = np.full((self._batch_size, self._max_length), -100, dtype=np.int32)
-
-            max_rel = 0
-            for i in range(self._batch_size):
-                max_rel = max(max_rel, self._segment_rel[i].shape[0])
-            segment_rel = np.zeros((self._batch_size, max_rel), dtype=np.int32)
-            spans = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-            length = np.zeros((self._batch_size,), dtype=np.int32)
-            task_ids = np.zeros((self._batch_size, self._max_length), dtype=np.int32)
-
-            all_task_names: Set[str] = set()
-            for i in range(self._batch_size):
-                for task_name in self._task_ids[i]:
-                    all_task_names.add(task_name)
-            task_names: List[str] = list(all_task_names)
-            task_name_to_id = {name: i for i, name in enumerate(task_names)}
-
-            batch_ext_table_map: Dict[Tuple[int, int], int] = {}
-            batch_ext_table_ids: List[int] = []
-            batch_ext_table_sub: List[int] = []
-            raw_data_list: List[Any] = []
-            for i in range(self._batch_size):
-                instance_length = self._inputs[i].shape[0]
-                rel_size = self._segment_rel[i].shape[0]
-                inputs[i, :instance_length] = self._inputs[i]
-                inputs_sub[i, :instance_length] = self._inputs_sub[i]
-                context[i, :instance_length] = self._context[i]
-                sample_ids[i, :instance_length] = self._sample_ids[i]
-                segments[i, :instance_length] = self._segments[i]
-                num_segments[i, :instance_length] = self._num_segments[i]
-                segment_rel_offset[i, :instance_length] = self._segment_rel_offset[i]
-                segment_rel[i, :rel_size] = self._segment_rel[i]
-
-                span_begin = 0
-                for span_id, (span_end, task_name) in enumerate(
-                    zip(self._spans[i], self._task_ids[i])
-                ):
-                    spans[i, span_begin:span_end] = span_id
-                    task_ids[i, span_begin:span_end] = task_name_to_id[task_name]
-                    span_begin = span_end
-                length[i] = instance_length
-                raw_data_list.extend(self._raw_data[i])
-
-                for j in range(instance_length):
-                    idx, idx_sub = self._inputs[i][j], self._inputs_sub[i][j]
-                    tgt_idx = idx
-                    if idx_sub > 0:
-                        # need to be in ext table
-                        if (idx, idx_sub) not in batch_ext_table_map:
-                            batch_ext_table_map[(idx, idx_sub)] = len(batch_ext_table_map)
-                            batch_ext_table_ids.append(idx)
-                            batch_ext_table_sub.append(idx_sub)
-                        tgt_idx = batch_ext_table_map[(idx, idx_sub)] + self.tokenizer.vocab_size
-                    if context[i, j] == 0 and idx != self.tokenizer.bos_id and j > 1:
-                        tgt[i, j - 1] = tgt_idx
-            if len(batch_ext_table_map) == 0:
-                # placeholder
-                batch_ext_table_ids.append(0)
-                batch_ext_table_sub.append(1)
-
-            self._inputs = self._inputs[self._batch_size :]
-            self._inputs_sub = self._inputs_sub[self._batch_size :]
-            self._context = self._context[self._batch_size :]
-            self._sample_ids = self._sample_ids[self._batch_size :]
-            self._segments = self._segments[self._batch_size :]
-            self._num_segments = self._num_segments[self._batch_size :]
-            self._segment_rel_offset = self._segment_rel_offset[self._batch_size :]
-            self._segment_rel = self._segment_rel[self._batch_size :]
-            self._spans = self._spans[self._batch_size :]
-            self._task_ids = self._task_ids[self._batch_size :]
-            self._raw_data = self._raw_data[self._batch_size :]
-            return {
-                "inputs": inputs,
-                "inputs_sub": inputs_sub,
-                "length": length,
-                "context": context > 0,
-                "sample_ids": sample_ids,
-                "num_segments": num_segments,
-                "segment_ids": segments,
-                "segment_rel_offset": segment_rel_offset,
-                "segment_rel": segment_rel,
-                "spans": spans,
-                "target": tgt,
-                "ext_ids": np.array(batch_ext_table_ids, dtype=np.int32),
-                "ext_sub": np.array(batch_ext_table_sub, dtype=np.int32),
-                "task_ids": task_ids,
-                "task_names": task_names,
-                "raw_data": raw_data_list,
-            }
+            return self.pack_batch()
         else:
             # not ready
             return None

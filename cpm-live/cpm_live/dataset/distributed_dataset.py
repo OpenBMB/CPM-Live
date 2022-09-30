@@ -142,6 +142,7 @@ class DistributedDataset:
         serializer: Optional[Serializer] = None,
         block_size: int = _DEFAULT_BLOCK_SIZE,
         max_repeat_times: Optional[int] = None,
+        shuffle: bool = True,
     ) -> None:
         # config
         self._path = path
@@ -150,6 +151,7 @@ class DistributedDataset:
         self._block_size = block_size
         self._max_repeat_times = max_repeat_times
         self._repeat_times = 0
+        self._shuffle = shuffle
 
         if serializer is None:
             serializer = PickleSerializer()
@@ -172,6 +174,7 @@ class DistributedDataset:
         self._curr_fname = None
 
         self._update_states(fast_skip=False)
+        self._repeat_times += 1
 
     def _update_states(self, fast_skip: bool = True):
         meta_path = os.path.join(self._path, "meta.bin")
@@ -249,7 +252,8 @@ class DistributedDataset:
                         )
 
             # re-shuffle unused blocks
-            random.shuffle(nw_unused_block)
+            if self._shuffle:
+                random.shuffle(nw_unused_block)
             self._unused_block = nw_unused_block
 
             self._file_ends = []
@@ -276,19 +280,18 @@ class DistributedDataset:
         return self._file_info[file_idx]
 
     def _prepare_new_epoch(self):
-        self._repeat_times += 1
-
         if self._max_repeat_times is not None:
             if self._repeat_times >= self._max_repeat_times:
                 raise EOFError("End of dataset")
-
+        self._repeat_times += 1
         nw_unused_block: List[int] = []
         for v in self._file_info:
             if not v.mask:
                 nw_unused_block.extend(
                     _filtered_range(v.block_begin, v.block_end, self._rank, self._world_size)
                 )
-        random.shuffle(nw_unused_block)
+        if self._shuffle:
+            random.shuffle(nw_unused_block)
         self._unused_block = nw_unused_block
 
     def _get_next_block(self):
@@ -406,7 +409,8 @@ class DistributedDataset:
                             if block_id % self._world_size == self._rank
                         ]
                     )
-                random.shuffle(nw_unused_block)
+                if self._shuffle:
+                    random.shuffle(nw_unused_block)
                 self._unused_block = nw_unused_block
         else:
             curr_block, inblock_offset, num_unused_blocks, self._repeat_times = block_info[
@@ -482,10 +486,20 @@ class DistributedDataset:
 
 class SimpleDataset(DistributedDataset):
     def __init__(
-        self, path: str, serializer: Optional[Serializer] = None, block_size=_DEFAULT_BLOCK_SIZE
+        self,
+        path: str,
+        serializer: Optional[Serializer] = None,
+        block_size=_DEFAULT_BLOCK_SIZE,
+        shuffle: bool = True,
     ) -> None:
         super().__init__(
-            path, 0, 1, serializer=serializer, block_size=block_size, max_repeat_times=1
+            path,
+            0,
+            1,
+            serializer=serializer,
+            block_size=block_size,
+            max_repeat_times=1,
+            shuffle=shuffle,
         )
 
     def __iter__(self):

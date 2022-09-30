@@ -13,9 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import time
-from typing import Any, Dict, List, Union
+from typing import Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
@@ -23,8 +22,8 @@ from cpm_live.arguments import get_args
 
 from cpm_live.models import CPMBee, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
-from cpm_live.utils import allgather_objects, LogManager
-from cpm_live.training_tasks.bee import MixedDataset
+from cpm_live.utils import allgather_objects
+from cpm_live.training_tasks.bee import FinetuneDataset
 
 
 def get_tokenizer(args):
@@ -46,13 +45,6 @@ def get_optimizer(args, model):
     optimizer = bmt.optim.AdamOffloadOptimizer(
         model.parameters(), weight_decay=args.weight_decay, scale=args.loss_scale
     )
-    if args.load is not None:
-        if os.path.exists(os.path.join(args.save, args.save_name + (".rank-%d.opt" % 0))):
-            # optimizer state exists
-            states = torch.load(
-                os.path.join(args.save, args.save_name + (".rank-%d.opt" % bmt.rank()))
-            )
-            optimizer.load_state_dict(states)
     return optimizer
 
 
@@ -80,7 +72,7 @@ def setup_model_and_optimizer(args):
 
 
 def initialize():
-    args = get_args(pretrain=True)
+    args = get_args(finetune=True)
     bmt.init_distributed(seed=args.seed, loss_scale_factor=2, loss_scale_steps=512)
     if args.save is not None:
         os.makedirs(args.save, exist_ok=True)
@@ -106,46 +98,7 @@ def add_mem_time(info, mem_usage, tim_usage):
     return mem_usage, tim_usage
 
 
-class LossSpikeDetector:
-    def __init__(self, log_path: str) -> None:
-        self._last_loss: Dict[str, float] = {}
-        self._last_data: List[Any] = [None]
-        self._log_path = log_path
-
-    def update_data(self, data: Any):
-        self._last_data.append(data)
-        if len(self._last_data) > 2:
-            self._last_data = self._last_data[-2:]
-
-    def update_loss(self, iteration: int, loss_map: Dict[str, float]):
-        loss_spike_result = []
-        for task, loss in loss_map.items():
-            if task in self._last_loss:
-                if loss > self._last_loss[task] * 3:
-                    # loss spike!
-                    loss_spike_result.append(
-                        {
-                            "prev": self._last_loss[task],
-                            "curr": loss,
-                            "task": task,
-                        }
-                    )
-            self._last_loss[task] = float(loss)
-        if len(loss_spike_result) > 0:
-            self._write_log(iteration, self._last_data[-1], loss_spike_result)
-
-    def _write_log(self, iteration: int, data: Any, result: List[Dict[str, Any]]):
-        with open(self._log_path, "a", encoding="utf-8") as fp:
-            fp.write("=" * 20)
-            fp.write("\nloss spike at {}\n".format(iteration))
-            fp.write("{}\n".format(json.dumps(result, indent=4, ensure_ascii=False)))
-            fp.write("data: \n")
-            for d in data:
-                fp.write("{}\n".format(json.dumps(d, indent=4, ensure_ascii=False)))
-            fp.write("\n\n")
-
-
-def pretrain(
+def finetune(
     args,
     tokenizer: CPMBeeTokenizer,
     model: CPMBee,
@@ -156,10 +109,6 @@ def pretrain(
     average_time = bmt.utils.AverageRecorder()
     loss_func = bmt.loss.FusedCrossEntropy(ignore_index=-100)
 
-    start_step = args.start_step
-
-    lsd = LossSpikeDetector("debug/spile.%d.log" % bmt.rank())
-
     if args.tensorboard is not None and bmt.rank() == 0:
         from torch.utils.tensorboard import SummaryWriter
         import distutils.version  # noqa: F401
@@ -168,29 +117,34 @@ def pretrain(
             os.makedirs(args.tensorboard)
         writer = SummaryWriter(log_dir=args.tensorboard)
 
-    if args.log_dir is not None and bmt.rank() == 0:
-        log_mgr = LogManager(args.log_dir)
-
     global_token_pass = 0.0
     global_world_size = bmt.world_size()
-    dataloader = MixedDataset(
-        args.dataset, args.batch_size, args.max_length, tokenizer, max_depth=8
+    dataloader = FinetuneDataset(
+        args.dataset,
+        args.batch_size,
+        args.max_length,
+        tokenizer,
+        max_depth=8,
+        task_name=args.task_name,
+        drop_last=args.drop_last,
     )
 
-    if os.path.exists(os.path.join(args.save, args.save_name + ("-%d.data.pt" % start_step))):
-        # load dataset states if exists
-        dataset_states = torch.load(
-            os.path.join(args.save, args.save_name + ("-%d.data.pt" % start_step))
-        )
-        missing = dataloader.load_state_dict(dataset_states)
-        if len(missing) > 0:
-            bmt.print_rank("Missing keys when loading dataset states: ", missing)
-    dataloader.start()
-    try:
+    for epoch in range(args.epoch):
+        epoch = epoch + 1
+        last_data = None
         for iteration, data in enumerate(dataloader):
+            iteration = iteration + 1
+            skip_this_batch = False
+            if data is None:
+                if last_data is None:
+                    raise RuntimeError(
+                        "Dataset is too small, please use a smaller batch size or sequence length!"
+                    )
+                data = last_data  # use last data
+                skip_this_batch = True
+            else:
+                last_data = data
 
-            iteration = iteration + start_step + 1
-            assert data["inputs"].shape[0] == args.batch_size
             input_ids = torch.from_numpy(data["inputs"]).cuda().to(torch.int32)
             input_ids_sub = torch.from_numpy(data["inputs_sub"]).cuda().to(torch.int32)
             input_length = torch.from_numpy(data["length"]).cuda().to(torch.int32)
@@ -208,8 +162,6 @@ def pretrain(
             ext_table_sub = torch.from_numpy(data["ext_sub"]).cuda().to(torch.int32)
             task_ids = torch.from_numpy(data["task_ids"]).cuda().to(torch.int32)
             task_names = data["task_names"]
-            lsd.update_data(data["raw_data"])
-
             # ===========
             optimizer.zero_grad()
             # torch.cuda.empty_cache()
@@ -233,7 +185,9 @@ def pretrain(
                 ext_table_sub,
             )
             loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
-            global_loss = bmt.sum_loss(loss).item()
+            if skip_this_batch:
+                loss = loss * 0
+
             mem_usage, tim_usage = add_mem_time("forward", mem_usage, tim_usage)
 
             # ===========
@@ -245,6 +199,7 @@ def pretrain(
             grad_norm = bmt.optim.clip_grad_norm(
                 optimizer.param_groups, args.clip_grad, scale=optimizer.scale, norm_type=2
             )
+
             bmt.optim_step(optimizer, lr_scheduler)
             mem_usage, tim_usage = add_mem_time("optim", mem_usage, tim_usage)
 
@@ -263,12 +218,12 @@ def pretrain(
                 )
 
                 task_loss_map: Dict[str, float] = {}
-                for i in range(task_num):
-                    task_loss = loss_func(
-                        logits.view(-1, logits.size(-1)), targets_tmp[i, :].view(-1)
-                    )
-                    # global_task_loss = float(bmt.sum_loss(task_loss).item())
-                    task_loss_map[task_names[i]] = task_loss.item()
+                if not skip_this_batch:
+                    for i in range(task_num):
+                        task_loss = loss_func(
+                            logits.view(-1, logits.size(-1)), targets_tmp[i, :].view(-1)
+                        )
+                        task_loss_map[task_names[i]] = task_loss.item()
                 gatherd_task_loss_map: List[Dict[str, float]] = allgather_objects(task_loss_map)
 
                 global_task_loss_map: Dict[str, Union[List[float], float]] = {}
@@ -291,12 +246,12 @@ def pretrain(
                 global_world_size * local_total_rate * args.max_length * args.batch_size
             )
             avg_time = average_time.value
-            lsd.update_loss(iteration, task_loss_map)
 
             train_info = {
                 "time": tim_usage["init"],
+                "epoch": epoch,
                 "iteration": iteration,
-                "loss": global_loss,
+                "loss": task_loss_map[args.task_name],
                 "lr": lr_scheduler.current_lr,
                 "lr_scale": int(optimizer.scale),
                 "time_usage": tim_usage,
@@ -313,11 +268,12 @@ def pretrain(
 
             bmt.print_rank(
                 (
-                    "| Iter: {:6d} | loss: {:.4f} | lr: {:.4e}, scale: {:10.4f} | time: {:.4f} |"
+                    "| Epoch: {:3d} | Iter: {:6d} | loss: {:.4f} | lr: {:.4e}, scale: {:10.4f} | time: {:.4f} |"
                     + " token/max: {:.4f} | mask/max: {:.4f} | grad_norm: {:.4f}"
                 ).format(
+                    epoch,
                     iteration,
-                    global_loss,
+                    task_loss_map[args.task_name],
                     lr_scheduler.current_lr,
                     int(optimizer.scale),
                     avg_time,
@@ -341,37 +297,21 @@ def pretrain(
                 train_info["model_inspect"] = model_inspect
 
             # write log here
-            if args.log_dir is not None and bmt.rank() == 0:
-                log_mgr.write(**train_info)
             if args.tensorboard is not None and bmt.rank() == 0:
-                writer.add_scalar("Loss/train", global_loss, iteration)
+                writer.add_scalar("Loss/train", task_loss_map[args.task_name], iteration)
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
 
-            if args.save is not None and iteration % args.save_iters == 0:
-                bmt.save(model, os.path.join(args.save, args.save_name + ("-%d.pt" % iteration)))
-                torch.save(
-                    optimizer.state_dict(),
-                    os.path.join(args.save, args.save_name + (".rank-%d.opt" % bmt.rank())),
-                )
-                all_states = dataloader.state_dict()
-                if bmt.rank() == 0:
-                    # rank 0 writes the dataloader state
-                    torch.save(
-                        all_states,
-                        os.path.join(args.save, args.save_name + ("-%d.data.pt" % iteration)),
-                    )
-                del all_states
-    finally:
-        dataloader.close()
-
-    bmt.save(model, os.path.join(args.save, args.save_name + ".pt"))
+        # end of epoch
+        if args.save is not None and epoch % args.save_epochs == 0:
+            bmt.save(model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch)))
+    # end of finetune
 
 
 def main():
     args = initialize()
     tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-    pretrain(args, tokenizer, model, optimizer, lr_scheduler)
+    finetune(args, tokenizer, model, optimizer, lr_scheduler)
 
 
 if __name__ == "__main__":
