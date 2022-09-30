@@ -268,7 +268,8 @@ def finetune(
 
             bmt.print_rank(
                 (
-                    "| Epoch: {:3d} | Iter: {:6d} | loss: {:.4f} | lr: {:.4e}, scale: {:10.4f} | time: {:.4f} |"
+                    "| Epoch: {:3d} | Iter: {:6d} | loss: {:.4f} "
+                    + "| lr: {:.4e}, scale: {:10.4f} | time: {:.4f} |"
                     + " token/max: {:.4f} | mask/max: {:.4f} | grad_norm: {:.4f}"
                 ).format(
                     epoch,

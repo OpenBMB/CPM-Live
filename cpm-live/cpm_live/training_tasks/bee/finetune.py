@@ -60,10 +60,10 @@ class FinetuneDataset:
                 yield None
             else:
                 ret: CPMBeeBatch = {
-                    kw: val[batch_st:batch_end]
+                    kw: val[batch_st:batch_end]  # type: ignore
                     for kw, val in batch.items()
                     if kw not in ["task_names", "raw_data"]
-                }
+                }  # type: ignore
                 ret["task_names"] = batch["task_names"]
                 ret["raw_data"] = batch["raw_data"]
                 yield ret
