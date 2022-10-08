@@ -179,6 +179,10 @@ class CPMBeeTokenizer(object):
     def escape(text: str) -> str:
         return text.replace("<", "<<")
 
+    @staticmethod
+    def unescape(text: str) -> str:
+        return text.replace("<<", "<")
+
     def encode(
         self, text: str, past_table: Dict[int, str] = {}
     ) -> Tuple[List[int], Dict[int, str]]:
