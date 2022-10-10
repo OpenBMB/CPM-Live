@@ -64,7 +64,7 @@ def shuffle_dataset(
     if progress_bar and not support_tqdm:
         raise RuntimeError("Requires `tqdm` to enable progress bar.")
 
-    ds = SimpleDataset(path_src, block_size=block_size, serializer=RawSerializer())
+    ds = SimpleDataset(path_src, serializer=RawSerializer())
     num_buckets = (ds.nbytes + bucket_size - 1) // bucket_size
 
     tmp_files = [os.path.join(path_src, ".tmp.%s" % _random_string()) for _ in range(num_buckets)]
@@ -162,6 +162,7 @@ def compact_dataset(path: str):
                     v.nbytes,
                     v.nlines,
                     v.mask,
+                    v.block_size,
                 )
             )
             curr_block += num_file_block
@@ -225,6 +226,7 @@ def merge_dataset(dst: str, src: str):
                 v.nbytes,
                 v.nlines,
                 v.mask,
+                v.block_size,
             )
         )
         curr_block += num_file_block
@@ -250,6 +252,7 @@ def merge_dataset(dst: str, src: str):
                 v.nbytes,
                 v.nlines,
                 v.mask,
+                v.block_size,
             )
         )
         curr_block += num_file_block

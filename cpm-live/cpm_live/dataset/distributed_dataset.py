@@ -30,6 +30,9 @@ def _random_string():
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 
+_DEFAULT_BLOCK_SIZE = 16 << 20
+
+
 class FileInfo:
     def __init__(
         self,
@@ -39,6 +42,7 @@ class FileInfo:
         nbytes: int = 0,
         nlines: int = 0,
         mask: bool = False,
+        block_size: int = _DEFAULT_BLOCK_SIZE,
     ) -> None:
         self.file_name = file_name
         self.block_begin = block_begin
@@ -46,6 +50,7 @@ class FileInfo:
         self.nbytes = nbytes
         self.nlines = nlines
         self.mask = mask
+        self.block_size = block_size
 
     def state_dict(self):
         return {
@@ -55,6 +60,7 @@ class FileInfo:
             "nbytes": self.nbytes,
             "nlines": self.nlines,
             "mask": self.mask,
+            "block_size": self.block_size,
         }
 
     def load_state_dict(self, d):
@@ -64,6 +70,7 @@ class FileInfo:
         self.nbytes = d["nbytes"]
         self.nlines = d["nlines"]
         self.mask = d["mask"]
+        self.block_size = d["block_size"]
 
     def dumps(self) -> str:
         return json.dumps(self.state_dict())
@@ -79,9 +86,6 @@ class FileInfo:
     def load(self, fp: io.TextIOWrapper) -> "FileInfo":
         self.loads(fp.read())
         return self
-
-
-_DEFAULT_BLOCK_SIZE = 16 << 20
 
 
 def _read_info_list(meta_path: str) -> List[FileInfo]:
@@ -140,7 +144,6 @@ class DistributedDataset:
         rank: int = 0,
         world_size: int = 1,
         serializer: Optional[Serializer] = None,
-        block_size: int = _DEFAULT_BLOCK_SIZE,
         max_repeat_times: Optional[int] = None,
         shuffle: bool = True,
     ) -> None:
@@ -148,7 +151,6 @@ class DistributedDataset:
         self._path = path
         self._rank = rank
         self._world_size = world_size
-        self._block_size = block_size
         self._max_repeat_times = max_repeat_times
         self._repeat_times = 0
         self._shuffle = shuffle
@@ -310,7 +312,7 @@ class DistributedDataset:
         if (self._fp is not None) and (self._curr_block is not None):
             curr_block = self._curr_block
             curr_f = self._get_block_file(curr_block)
-            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * self._block_size
+            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * curr_f.block_size
         else:
             curr_block = -1
             inblock_offset = 0
@@ -337,7 +339,7 @@ class DistributedDataset:
         if (self._fp is not None) and (self._curr_block is not None):
             curr_block = self._curr_block
             curr_f = self._get_block_file(curr_block)
-            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * self._block_size
+            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * curr_f.block_size
         else:
             curr_block = -1
             inblock_offset = 0
@@ -424,7 +426,7 @@ class DistributedDataset:
                 f_info = self._get_block_file(self._curr_block)
                 self._open_file(
                     f_info.file_name,
-                    (self._curr_block - f_info.block_begin) * self._block_size + inblock_offset,
+                    (self._curr_block - f_info.block_begin) * f_info.block_size + inblock_offset,
                 )
                 self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
         # end
@@ -456,7 +458,7 @@ class DistributedDataset:
             try:
                 self._open_file(
                     f_info.file_name,
-                    (next_block_id - f_info.block_begin) * self._block_size,
+                    (next_block_id - f_info.block_begin) * f_info.block_size,
                 )
                 self._curr_block = next_block_id
             except FileNotFoundError:
@@ -489,7 +491,6 @@ class SimpleDataset(DistributedDataset):
         self,
         path: str,
         serializer: Optional[Serializer] = None,
-        block_size=_DEFAULT_BLOCK_SIZE,
         shuffle: bool = True,
     ) -> None:
         super().__init__(
@@ -497,7 +498,6 @@ class SimpleDataset(DistributedDataset):
             0,
             1,
             serializer=serializer,
-            block_size=block_size,
             max_repeat_times=1,
             shuffle=shuffle,
         )
@@ -638,6 +638,7 @@ class DatasetBuilder:
                     self._writer.nbytes,
                     self._writer.nlines,
                     False,
+                    self._block_size,
                 )
             )
 
