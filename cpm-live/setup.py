@@ -6,7 +6,7 @@ setup(
     author="OpenBMB",
     author_email="openbmb@gmail.com",
     description="Toolkit for CPM-Live",
-    packages=find_packages(include=("cpm_live",)),
+    packages=find_packages(),
     install_requires=[
         "numpy",
         "torch>=1.10",
