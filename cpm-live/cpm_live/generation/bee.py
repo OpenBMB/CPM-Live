@@ -14,8 +14,6 @@ class CPMBeeGeneration:
         self.model = model
         self.tokenizer = tokenizer
 
-        # self._packer = _MixedDatasetBatchPacker(0, 0, self.tokenizer, max_depth=8)
-
     def _convert_to_tensors(self, data: Any, in_context_samples: List[Any] = []):
         answer_placeholders = []
 
@@ -432,6 +430,13 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
             # skip all steps when we are done with each sentence
             if all(done):
                 break
+
+            for sent_id in range(batch_size):
+                if self.tokenizer.unk_id not in other_info[sent_id]["ext_table"]:
+                    # unk is not allowed, mask unk
+                    logits[
+                        sent_id * beam_size : (sent_id + 1) * beam_size, self.tokenizer.unk_id
+                    ] = -10000
 
             repetition_penalty(
                 logits,
