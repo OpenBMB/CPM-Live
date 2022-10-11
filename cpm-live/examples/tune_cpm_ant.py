@@ -6,8 +6,8 @@ import bmtrain as bmt
 from opendelta import LoraModel
 from task_config import task_config
 from arguments import get_args
-from cpm_live.models import CPMAnt, CPMAntConfig
-from cpm_live.tokenizers import CPMAntTokenizer
+from cpm_live.models import CPMAntPlus, CPMAntConfig
+from cpm_live.tokenizers import CPMAntPlusTokenizer
 
 
 if __name__ == "__main__":
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # load model
     bmt.init_distributed(seed=0)
     config = CPMAntConfig.from_json_file(args.config_path)
-    model = CPMAnt(config=config)
+    model = CPMAntPlus(config=config)
     bmt.load(model, args.model_path)
     # insert LoRA
     delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"])
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     delta_model.log()
 
     bmt.print_rank("[INFO] Tuning begins...")
-    tokenizer = CPMAntTokenizer()
+    tokenizer = CPMAntPlusTokenizer()
     config_dict = task_config[args.dataset_name]
     tune = config_dict["tune"](
         model=model,

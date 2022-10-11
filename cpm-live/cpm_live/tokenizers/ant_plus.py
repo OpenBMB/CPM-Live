@@ -15,7 +15,7 @@
 
 import pkg_resources
 import io
-from typing import IO, Dict, List, Optional, Tuple
+from typing import IO, Dict, List, Optional
 
 
 def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
@@ -190,7 +190,7 @@ class CPMAntPlusTokenizer(object):
 
     def encode(
         self, text: str, past_table: Dict[int, str] = {}
-    ) -> Tuple[List[int], Dict[int, str]]:
+    ) -> List[int]:
         ext_table_rev: Dict[str, int] = {}
         ext_table: Dict[int, str] = {}
         for idx, val in past_table.items():

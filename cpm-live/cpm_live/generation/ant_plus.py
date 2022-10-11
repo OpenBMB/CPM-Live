@@ -115,3 +115,13 @@ class CPMAntPlusSummarization(CPMAntPlusBeamSearch):
             model_inputs[key] = torch.tensor(model_inputs[key]).int().unsqueeze(0)
 
         return model_inputs
+
+
+class CPMAntPlusEnZhTranslation(CPMAntPlusSummarization):
+    def _convert_to_tensors(self, input_text, task_id=5):
+        return super()._convert_to_tensors(input_text, task_id)
+
+
+class CPMAntPlusZhEnTranslation(CPMAntPlusSummarization):
+    def _convert_to_tensors(self, input_text, task_id=6):
+        return super()._convert_to_tensors(input_text, task_id)

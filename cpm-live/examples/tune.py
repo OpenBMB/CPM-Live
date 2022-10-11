@@ -33,7 +33,7 @@ def pad_collate_fn():
     return inner
 
 
-class CPMAntTune:
+class CPMAntPlusTune:
     def __init__(
         self,
         model,
@@ -41,7 +41,7 @@ class CPMAntTune:
         prompt_length=32,
         lr=5e-3,
         warmup_iters=50,
-        task_id=1,
+        task_id=2,
         max_len=256,
         cls_num=None,
         epochs=1,
@@ -220,7 +220,7 @@ class CPMAntTune:
         self.forward(train_dataloader, eval_dataloader, cls_num=self.cls_num)
 
 
-class CPMAntNLGTune(CPMAntTune):
+class CPMAntPlusNLGTune(CPMAntPlusTune):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.truncate_num = 0
@@ -251,7 +251,7 @@ class CPMAntNLGTune(CPMAntTune):
                 target_ids = target_ids[-(self.max_len - self.prompt_length) :]
 
         res["input"] = (
-            [x + self.prompt_length * self.task_id for x in range(self.prompt_length)]
+            [x + self.prompt_length * self.task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
             + input_ids
             + target_ids
         )
@@ -282,7 +282,7 @@ class CPMAntNLGTune(CPMAntTune):
         return loss
 
 
-class CPMAntNLUTune(CPMAntTune):
+class CPMAntPlusNLUTune(CPMAntPlusTune):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.truncate_num = 0
@@ -319,7 +319,7 @@ class CPMAntNLUTune(CPMAntTune):
                 cur_input_ids = cur_input_ids[-tr_input_length:]
 
             ids = [
-                x + self.prompt_length * self.task_id for x in range(self.prompt_length)
+                x + self.prompt_length * self.task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)
             ] + cur_input_ids
             res["input"].append(ids)
             res["length"].append(len(ids))

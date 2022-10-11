@@ -7,8 +7,8 @@ import torch
 from opendelta import LoraModel
 from task_config import task_config
 from arguments import get_args
-from cpm_live.models import CPMAntTorch, CPMAntConfig
-from cpm_live.tokenizers import CPMAntTokenizer
+from cpm_live.models import CPMAntPlusTorch, CPMAntConfig
+from cpm_live.tokenizers import CPMAntPlusTokenizer
 
 
 if __name__ == "__main__":
@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     # init model
     config = CPMAntConfig.from_json_file(args.config_path)
-    model = CPMAntTorch(config=config)
+    model = CPMAntPlusTorch(config=config)
     # insert LoRA
     delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"])
     delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     print("[INFO] inference begins...")
     config_dict = task_config[args.dataset_name]
-    tokenizer = CPMAntTokenizer()
+    tokenizer = CPMAntPlusTokenizer()
     infer = config_dict["infer"](
         model=model,
         tokenizer=tokenizer,

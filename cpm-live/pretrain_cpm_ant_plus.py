@@ -419,8 +419,6 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
                 )
             del all_states
 
-    bmt.save(model, os.path.join(args.save, args.save_name + ".pt"))
-
 
 def main():
     args = initialize()

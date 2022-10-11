@@ -2,17 +2,17 @@ import torch
 import sys
 
 sys.path.insert(0, "..")
-from cpm_live.generation import CPMAntGeneration, CPMAntBeamSearch
+from cpm_live.generation import CPMAntPlusGeneration, CPMAntPlusBeamSearch
 
 
-class CPMAntNLGInfer(CPMAntBeamSearch):
-    def _convert_to_tensors(self, inputs, task_id=1):
+class CPMAntPlusNLGInfer(CPMAntPlusBeamSearch):
+    def _convert_to_tensors(self, inputs, task_id=2):
         input_text = inputs["input"]
         return super()._convert_to_tensors(input_text, task_id)
 
 
-class CPMAntNLUInfer(CPMAntGeneration):
-    def _convert_to_tensors(self, inputs, task_id=1):
+class CPMAntPlusNLUInfer(CPMAntPlusGeneration):
+    def _convert_to_tensors(self, inputs, task_id=2):
         option_list = inputs["options"]
         input_ids = [self.tokenizer.bos_id] + self.tokenizer.encode(inputs["input"])
 
@@ -26,7 +26,7 @@ class CPMAntNLUInfer(CPMAntGeneration):
 
         for option in option_list:
             ids = (
-                [x + self.prompt_length * task_id for x in range(self.prompt_length)]
+                [x + self.prompt_length * task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
                 + input_ids
                 + self.tokenizer.encode(option)
                 + self.tokenizer.encode("[是否正确]")
@@ -51,13 +51,13 @@ class CPMAntNLUInfer(CPMAntGeneration):
         return result.cpu().tolist()
 
 
-class CPMAntScoreInfer(CPMAntGeneration):
-    def _convert_to_tensors(self, inputs, task_id=1):
+class CPMAntPlusScoreInfer(CPMAntPlusGeneration):
+    def _convert_to_tensors(self, inputs, task_id=2):
         input_ids = [self.tokenizer.bos_id] + self.tokenizer.encode(inputs["input"])
 
         res = {}
         ids = (
-            [x + self.prompt_length * task_id for x in range(self.prompt_length)]
+            [x + self.prompt_length * task_id + self.tokenizer.vocab_size for x in range(self.prompt_length)]
             + input_ids
             + self.tokenizer.encode("[是否正确]")
         )
