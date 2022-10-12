@@ -23,7 +23,7 @@ $ pip install -r requirements.txt
 
 ## Model Checkpoints
 
-We release the checkpoint of CPM-Ant+ (10B), and you can download it from [here]().
+We release the checkpoint of CPM-Ant+ (10B), and you can download it from [here](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpm-ant-plus-10b/cpm-ant-plus-10b.zip).
 If you want to compress CPM-Ant+ into smaller models, please check our guidelines in [BMCook](https://github.com/OpenBMB/BMCook/tree/main/cpm_live_example)!
 
 ## Usage
@@ -85,7 +85,7 @@ If you want to use CPM-Ant+ on your own tasks, we provide several examples of ad
 
 You can use CPM-Ant+ directly for various NLP tasks.
 
-#### Text Generation
+#### 1. Text Generation
 
 You can use CPM-Ant+ for text generation, either in Chinese or English. Currently, we implement two decoding strategies: beam search and top-k/top-p sampling. Here is an example:
 
@@ -93,7 +93,7 @@ You can use CPM-Ant+ for text generation, either in Chinese or English. Currentl
 $ python text_generation.py
 ```
 
-#### Question Answering
+#### 2. Question Answering
 
 CPM-Ant+ can answer your questions based on the provided document, try it!
 
@@ -101,7 +101,7 @@ CPM-Ant+ can answer your questions based on the provided document, try it!
 $ python question_answering.py
 ```
 
-#### Extractive Summarization
+#### 3. Extractive Summarization
 
 With the help of CPM-Ant+, you can extract key sentences from a document.
 
@@ -109,7 +109,7 @@ With the help of CPM-Ant+, you can extract key sentences from a document.
 $ python summarization.py
 ```
 
-#### Machine Translation
+#### 4. Machine Translation
 
 You can also use CPM-Ant+ for Chinese-English and English-Chinese translation!
 
