@@ -135,3 +135,9 @@ dmypy.json
 *.bin
 *.idx
 *.pt
+
+logs
+data
+data_raw
+results
+pretrain_data

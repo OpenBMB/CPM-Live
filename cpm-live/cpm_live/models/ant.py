@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import List, Optional, Tuple
 import torch
 from ..utils import Config
@@ -160,7 +161,7 @@ class CPMAnt(bmt.DistributedModule):
         position: torch.Tensor,  # (batch, seqlen)
         segment: torch.Tensor,  # (batch, seqlen)
         span: torch.Tensor,  # (batch, seqlen)
-        past_key_values=None  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
+        past_key_values=None,  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
     ):
 
         batch = input.size(0)

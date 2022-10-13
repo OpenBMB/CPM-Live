@@ -15,12 +15,13 @@
 
 import io
 import os
-import pickle
-from typing import List
+import struct
+from typing import List, Optional, Set
 import torch
 import bisect
 import bmtrain as bmt
-
+import json
+from .serializer import Serializer, PickleSerializer
 import random
 import string
 
@@ -29,15 +30,19 @@ def _random_string():
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 
+_DEFAULT_BLOCK_SIZE = 16 << 20
+
+
 class FileInfo:
     def __init__(
         self,
-        file_name: str,
-        block_begin: int,
-        block_end: int,
-        nbytes: int,
-        nlines: int,
+        file_name: str = "",
+        block_begin: int = 0,
+        block_end: int = 0,
+        nbytes: int = 0,
+        nlines: int = 0,
         mask: bool = False,
+        block_size: int = _DEFAULT_BLOCK_SIZE,
     ) -> None:
         self.file_name = file_name
         self.block_begin = block_begin
@@ -45,34 +50,72 @@ class FileInfo:
         self.nbytes = nbytes
         self.nlines = nlines
         self.mask = mask
+        self.block_size = block_size
 
-    @classmethod
-    def _load_from_state(cls, version, data):
-        if version == 1:
-            file_name, block_begin, block_end, nbytes, nlines, mask = data
-            return cls(file_name, block_begin, block_end, nbytes, nlines, mask)
-        else:
-            raise RuntimeError("Unsupported version %d" % version)
+    def state_dict(self):
+        return {
+            "file_name": self.file_name,
+            "block_begin": self.block_begin,
+            "block_end": self.block_end,
+            "nbytes": self.nbytes,
+            "nlines": self.nlines,
+            "mask": self.mask,
+            "block_size": self.block_size,
+        }
 
-    def __reduce__(self):
-        return (
-            FileInfo._load_from_state,
-            (
-                1,
-                (
-                    self.file_name,
-                    self.block_begin,
-                    self.block_end,
-                    self.nbytes,
-                    self.nlines,
-                    self.mask,
-                ),
-            ),
-        )
+    def load_state_dict(self, d):
+        self.file_name = d["file_name"]
+        self.block_begin = d["block_begin"]
+        self.block_end = d["block_end"]
+        self.nbytes = d["nbytes"]
+        self.nlines = d["nlines"]
+        self.mask = d["mask"]
+        self.block_size = d["block_size"]
+
+    def dumps(self) -> str:
+        return json.dumps(self.state_dict())
+
+    def loads(self, data: str) -> "FileInfo":
+        self.load_state_dict(json.loads(data))
+        return self
+
+    def dump(self, fp: io.TextIOWrapper) -> "FileInfo":
+        fp.write(self.dumps())
+        return self
+
+    def load(self, fp: io.TextIOWrapper) -> "FileInfo":
+        self.loads(fp.read())
+        return self
 
 
-_MASK_VALUE = 0x7FFFFFFF
-_DEFAULT_BLOCK_SIZE = 16 << 20
+def _read_info_list(meta_path: str) -> List[FileInfo]:
+    info: List[FileInfo] = []
+    with open(meta_path, "r", encoding="utf-8") as f:
+        for line in f.readlines():
+            line = line.strip()
+            if len(line) > 0:
+                info.append(FileInfo().loads(line))
+    return info
+
+
+def _write_info_list(meta_path: str, info: List[FileInfo]):
+    base_path = os.path.dirname(meta_path)
+    random_fname = os.path.join(base_path, ".meta.bin.%s" % _random_string())
+    with open(random_fname, "w", encoding="utf-8") as f:
+        for v in info:
+            f.write(v.dumps() + "\n")
+    os.rename(random_fname, meta_path)
+
+
+def _filtered_range(
+    begin: int, end: int, rank: int, world_size: int, filter_set: Optional[Set[int]] = None
+):
+    begin = begin + (rank + (world_size - (begin % world_size))) % world_size
+
+    if filter_set is not None:
+        return [i for i in range(begin, end, world_size) if i in filter_set]
+    else:
+        return [i for i in range(begin, end, world_size)]
 
 
 class DistributedDataset:
@@ -100,16 +143,24 @@ class DistributedDataset:
         path: str,
         rank: int = 0,
         world_size: int = 1,
-        block_size=_DEFAULT_BLOCK_SIZE,
+        serializer: Optional[Serializer] = None,
+        max_repeat_times: Optional[int] = None,
+        shuffle: bool = True,
     ) -> None:
         # config
         self._path = path
         self._rank = rank
         self._world_size = world_size
-        self._block_size = block_size
+        self._max_repeat_times = max_repeat_times
+        self._repeat_times = 0
+        self._shuffle = shuffle
+
+        if serializer is None:
+            serializer = PickleSerializer()
+        self.serializer = serializer
 
         # dataset meta
-        self._block_states = torch.tensor([], dtype=torch.int)
+        self._unused_block: List[int] = []
         self._file_info: List[FileInfo] = []
         self._file_ends: List[int] = []
         self._total_blocks = 0
@@ -124,7 +175,8 @@ class DistributedDataset:
         self._last_mod_time = 0
         self._curr_fname = None
 
-        self._update_states()
+        self._update_states(fast_skip=False)
+        self._repeat_times += 1
 
     def _update_states(self, fast_skip: bool = True):
         meta_path = os.path.join(self._path, "meta.bin")
@@ -139,12 +191,13 @@ class DistributedDataset:
 
         info: List[FileInfo] = []
         if os.path.exists(meta_path):
-            with open(meta_path, "rb") as f:
-                info = pickle.load(f)
+            info = _read_info_list(meta_path)
 
         old_len = len(self._file_info)
         if old_len > len(info):
             raise RuntimeError("Dataset meta file: changed unexpectly")
+
+        mask_changed = False
         for i in range(old_len):
             if self._file_info[i].file_name != info[i].file_name:
                 raise RuntimeError("Dataset meta file: changed unexpectly")
@@ -152,6 +205,8 @@ class DistributedDataset:
                 raise RuntimeError("Dataset meta file: changed unexpectly")
             if self._file_info[i].block_end != info[i].block_end:
                 raise RuntimeError("Dataset meta file: changed unexpectly")
+            if self._file_info[i].mask != info[i].mask:
+                mask_changed = True
 
         if info[0].block_begin != 0:
             raise RuntimeError("Dataset meta file: block error (0)")
@@ -159,7 +214,7 @@ class DistributedDataset:
             if info[i].block_end != info[i + 1].block_begin:
                 raise RuntimeError("Dataset meta file: block error (%d)" % (i + 1))
 
-        if old_len == len(info) and fast_skip:
+        if (old_len == len(info) and not mask_changed) and fast_skip:
             # fast skip
             return
 
@@ -176,32 +231,38 @@ class DistributedDataset:
             self._nlines = 0
 
         if total_blocks > 0:
-            masks = torch.full(
-                (total_blocks,),
-                _MASK_VALUE,
-                dtype=torch.int,
-                device="cpu",
-                requires_grad=False,
-            )
-            masks[self._rank :: self._world_size] = 0
-            for v in info:
-                if v.mask or (not os.path.exists(self._get_file_path(v.file_name))):
-                    masks[v.block_begin : v.block_end] = _MASK_VALUE
-            new_block_states = torch.zeros(
-                total_blocks, dtype=torch.int, device="cpu", requires_grad=False
-            )
-            new_block_states[: self._block_states.size(0)] = self._block_states
-            new_block_states = torch.maximum(new_block_states, masks)
+            unused_block_set = set(self._unused_block)
+            nw_unused_block: List[int] = []
+            for i in range(len(info)):
+                v = info[i]
+                if not v.mask:
+                    if i < old_len:
+                        nw_unused_block.extend(
+                            _filtered_range(
+                                v.block_begin,
+                                v.block_end,
+                                self._rank,
+                                self._world_size,
+                                unused_block_set,
+                            )
+                        )
+                    else:
+                        nw_unused_block.extend(
+                            _filtered_range(
+                                v.block_begin, v.block_end, self._rank, self._world_size
+                            )
+                        )
 
-            self._block_states = new_block_states
+            # re-shuffle unused blocks
+            if self._shuffle:
+                random.shuffle(nw_unused_block)
+            self._unused_block = nw_unused_block
 
             self._file_ends = []
             for v in info:
                 self._file_ends.append(v.block_end)
         else:
-            self._block_states = torch.tensor(
-                [], dtype=torch.int, device="cpu", requires_grad=False
-            )
+            self._unused_block = []
             self._file_ends = []
         self._total_blocks = total_blocks
         self._file_info = info
@@ -209,26 +270,61 @@ class DistributedDataset:
         assert len(self._file_ends) == len(self._file_info)
 
     def _mask_file(self, f: FileInfo):
-        masks = torch.full(
-            (self._total_blocks,), 0, dtype=torch.int, device="cpu", requires_grad=False
-        )
-        masks[f.block_begin : f.block_end] = _MASK_VALUE
-        self._block_states = torch.maximum(self._block_states, masks)
+        self._unused_block = [
+            block_id
+            for block_id in self._unused_block
+            if block_id < f.block_begin or block_id >= f.block_end
+        ]
 
     def _get_block_file(self, block_id: int):
         # find block in which file
         file_idx = bisect.bisect_right(self._file_ends, block_id)
         return self._file_info[file_idx]
 
+    def _prepare_new_epoch(self):
+        if self._max_repeat_times is not None:
+            if self._repeat_times >= self._max_repeat_times:
+                raise EOFError("End of dataset")
+        self._repeat_times += 1
+        nw_unused_block: List[int] = []
+        for v in self._file_info:
+            if not v.mask:
+                nw_unused_block.extend(
+                    _filtered_range(v.block_begin, v.block_end, self._rank, self._world_size)
+                )
+        if self._shuffle:
+            random.shuffle(nw_unused_block)
+        self._unused_block = nw_unused_block
+
     def _get_next_block(self):
         self._update_states()
-        if self._block_states.size(0) == 0:
-            raise RuntimeError("Empty dataset")
-        mn_block: int = self._block_states.argmin().item()  # type: ignore
-        if self._block_states[mn_block].item() == _MASK_VALUE:
-            raise RuntimeError("Empty dataset")
-        self._block_states[mn_block] += 1
+        if len(self._unused_block) == 0:
+            self._prepare_new_epoch()
+            if len(self._unused_block) == 0:
+                raise RuntimeError("Empty dataset")
+
+        mn_block: int = self._unused_block.pop()
         return mn_block
+
+    def _state_dict(self):
+        self._update_states()
+        num_unused_block = len(self._unused_block)
+        if (self._fp is not None) and (self._curr_block is not None):
+            curr_block = self._curr_block
+            curr_f = self._get_block_file(curr_block)
+            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * curr_f.block_size
+        else:
+            curr_block = -1
+            inblock_offset = 0
+
+        return {
+            "states": torch.tensor(self._unused_block, dtype=torch.long, device="cpu"),
+            "block": torch.tensor(
+                [curr_block, inblock_offset, num_unused_block, self._repeat_times],
+                dtype=torch.long,
+                device="cpu",
+            ),
+        }
 
     def state_dict(self):
         """Returns a state dict representing the read states of the dataset.
@@ -238,32 +334,43 @@ class DistributedDataset:
             >>> dataset.load_state_dict(state)
         """
         self._update_states()
-        states = torch.where(
-            self._block_states == _MASK_VALUE,
-            torch.zeros(self._total_blocks, dtype=torch.int, device="cpu", requires_grad=False),
-            self._block_states,
-        )
+        num_unused_block = len(self._unused_block)
 
         if (self._fp is not None) and (self._curr_block is not None):
             curr_block = self._curr_block
             curr_f = self._get_block_file(curr_block)
-            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * self._block_size
+            inblock_offset = self._fp.tell() - (curr_block - curr_f.block_begin) * curr_f.block_size
         else:
             curr_block = -1
             inblock_offset = 0
 
         with torch.no_grad():
             if self._world_size > 1:
-                gpu_states = states.cuda()
-                gpu_block = torch.tensor([curr_block, inblock_offset], dtype=torch.long).cuda()
-                global_states = bmt.distributed.all_reduce(gpu_states, op="sum").cpu()
-                global_block = bmt.distributed.all_gather(gpu_block).cpu()
+                gpu_num_unused_block = torch.tensor([num_unused_block], dtype=torch.long).cuda()
+                max_unused_blocks = (
+                    bmt.distributed.all_reduce(gpu_num_unused_block, op="max").cpu().item()
+                )
+                gpu_states = torch.full((max_unused_blocks,), -1, dtype=torch.long).cuda()
+                gpu_states[:num_unused_block] = torch.tensor(
+                    self._unused_block, dtype=torch.long
+                ).cuda()
+
+                gpu_block = torch.tensor(
+                    [curr_block, inblock_offset, num_unused_block, self._repeat_times],
+                    dtype=torch.long,
+                ).cuda()
+                global_states = bmt.distributed.all_gather(
+                    gpu_states
+                ).cpu()  # (world_size, max_unused_blocks)
+                global_block = bmt.distributed.all_gather(gpu_block).cpu()  # (world_size, 4)
                 return {"states": global_states, "block": global_block}
             else:
                 return {
-                    "states": states,
+                    "states": torch.tensor([self._unused_block], dtype=torch.long, device="cpu"),
                     "block": torch.tensor(
-                        [[curr_block, inblock_offset]], dtype=torch.long, device="cpu"
+                        [[curr_block, inblock_offset, num_unused_block, self._repeat_times]],
+                        dtype=torch.long,
+                        device="cpu",
                     ),
                 }
 
@@ -278,11 +385,10 @@ class DistributedDataset:
             >>> state = dataset.state_dict()
             >>>
         """
+        block_states: torch.LongTensor = state["states"]
+        block_info: torch.LongTensor = state["block"]
 
-        self._block_states = state["states"]
-        self._update_states(False)
-
-        if state["block"].size(0) != self._world_size:
+        if block_states.size(0) != self._world_size:
             if strict:
                 raise ValueError(
                     "world_size changed (%d -> %d)" % (state["block"].size(0), self._world_size)
@@ -291,9 +397,27 @@ class DistributedDataset:
                 self._curr_block = None
                 self._fp = None
                 self._curr_fname = None
+                self._repeat_times = int(block_info[0, 3].item())
+
+                # re-shuffle unused blocks
+                nw_unused_block: List[int] = []
+                for i in range(block_states.size(0)):
+                    # filter blocks that are not in this rank
+                    num_unused_blocks: int = int(block_info[i, 2].item())
+                    nw_unused_block.extend(
+                        [
+                            block_id
+                            for block_id in block_states[i, :num_unused_blocks].tolist()
+                            if block_id % self._world_size == self._rank
+                        ]
+                    )
+                if self._shuffle:
+                    random.shuffle(nw_unused_block)
+                self._unused_block = nw_unused_block
         else:
-            curr_block = state["block"][self._rank][0].item()
-            inblock_offset = state["block"][self._rank][1].item()
+            curr_block, inblock_offset, num_unused_blocks, self._repeat_times = block_info[
+                self._rank
+            ].tolist()
 
             if curr_block == -1:
                 self._curr_block = None
@@ -302,9 +426,11 @@ class DistributedDataset:
                 f_info = self._get_block_file(self._curr_block)
                 self._open_file(
                     f_info.file_name,
-                    (self._curr_block - f_info.block_begin) * self._block_size + inblock_offset,
+                    (self._curr_block - f_info.block_begin) * f_info.block_size + inblock_offset,
                 )
+                self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
         # end
+        self._update_states()
 
     def _get_file_path(self, fname):
         return os.path.join(self._path, fname)
@@ -332,7 +458,7 @@ class DistributedDataset:
             try:
                 self._open_file(
                     f_info.file_name,
-                    (next_block_id - f_info.block_begin) * self._block_size,
+                    (next_block_id - f_info.block_begin) * f_info.block_size,
                 )
                 self._curr_block = next_block_id
             except FileNotFoundError:
@@ -345,7 +471,9 @@ class DistributedDataset:
         MAGIC = self._fp.read(1)
         if MAGIC == b"\x1F":
             # correct
-            return pickle.load(self._fp)
+            size = struct.unpack("I", self._fp.read(4))[0]
+            data = self._fp.read(size)
+            return self.serializer.deserialize(data)
         elif MAGIC == b"\x00":
             # end of block
             self._curr_block = None
@@ -359,24 +487,27 @@ class DistributedDataset:
 
 
 class SimpleDataset(DistributedDataset):
-    def __init__(self, path: str, block_size=_DEFAULT_BLOCK_SIZE) -> None:
-        super().__init__(path, 0, 1, block_size)
-
-    def _get_next_block(self):
-        self._update_states()
-        if self._block_states.size(0) == 0:
-            raise RuntimeError("Empty dataset")
-        mn_block: int = self._block_states.argmin().item()  # type: ignore
-        if self._block_states[mn_block].item() >= 1:
-            raise EOFError("no more data")
-        self._block_states[mn_block] += 1
-        return mn_block
+    def __init__(
+        self,
+        path: str,
+        serializer: Optional[Serializer] = None,
+        shuffle: bool = True,
+    ) -> None:
+        super().__init__(
+            path,
+            0,
+            1,
+            serializer=serializer,
+            max_repeat_times=1,
+            shuffle=shuffle,
+        )
 
     def __iter__(self):
         while True:
             try:
                 data = self.read()
             except EOFError:
+                self._repeat_times = 0
                 break
             yield data
 
@@ -385,7 +516,7 @@ class SimpleDataset(DistributedDataset):
 
 
 class DatasetWriter:
-    def __init__(self, fname, block_size):
+    def __init__(self, fname: str, block_size: int, serializer: Optional[Serializer] = None):
         self._fname = fname
         self._block_size = block_size
         self._fp = open(self._fname, "wb")
@@ -394,6 +525,10 @@ class DatasetWriter:
         self._nbytes = 0
         self._nlines = 0
         self._nblocks = 1
+
+        if serializer is None:
+            serializer = PickleSerializer()
+        self.serializer = serializer
 
     def write(self, data):
         """Write a piece of data into dataset.
@@ -405,7 +540,8 @@ class DatasetWriter:
             >>> writer.write( "anything you want" )
 
         """
-        byte_data = pickle.dumps(data)
+        byte_data = self.serializer.serialize(data)
+        byte_data = struct.pack("I", len(byte_data)) + byte_data
         if self._inblock_offset + 2 + len(byte_data) > self._block_size:
             self._fp.write(
                 b"\x00" * (self._block_size - self._inblock_offset)
@@ -442,10 +578,19 @@ class DatasetWriter:
 
 
 class DatasetBuilder:
-    def __init__(self, path: str, dbname: str, block_size=_DEFAULT_BLOCK_SIZE) -> None:
+    def __init__(
+        self,
+        path: str,
+        dbname: str,
+        block_size=_DEFAULT_BLOCK_SIZE,
+        serializer: Optional[Serializer] = None,
+    ) -> None:
         self._block_size = block_size
         self._path = path
         self._dbname = dbname
+        if serializer is None:
+            serializer = PickleSerializer()
+        self.serializer = serializer
 
         if not os.path.exists(self._path):
             os.makedirs(self._path)
@@ -454,8 +599,7 @@ class DatasetBuilder:
 
         info: List[FileInfo] = []
         if os.path.exists(meta_path):
-            with open(meta_path, "rb") as f:
-                info = pickle.load(f)
+            info = _read_info_list(meta_path)
 
         for v in info:
             if v.file_name == dbname:
@@ -466,7 +610,7 @@ class DatasetBuilder:
             raise ValueError("File exists `%s`" % self._db_path)
 
     def __enter__(self):
-        self._writer = DatasetWriter(self._db_path, self._block_size)
+        self._writer = DatasetWriter(self._db_path, self._block_size, self.serializer)
         return self._writer
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -482,8 +626,7 @@ class DatasetBuilder:
             meta_path = os.path.join(self._path, "meta.bin")
             info: List[FileInfo] = []
             if os.path.exists(meta_path):
-                with open(meta_path, "rb") as f:
-                    info = pickle.load(f)
+                info = _read_info_list(meta_path)
             last_block = 0
             if len(info) > 0:
                 last_block = info[-1].block_end
@@ -495,19 +638,22 @@ class DatasetBuilder:
                     self._writer.nbytes,
                     self._writer.nlines,
                     False,
+                    self._block_size,
                 )
             )
 
             # atomic write to meta file
-            random_fname = os.path.join(self._path, ".meta.bin.%s" % _random_string())
-            with open(random_fname, "wb") as f:
-                pickle.dump(info, f)
-            os.rename(random_fname, meta_path)
+            _write_info_list(meta_path, info)
 
         self._writer = None
 
 
-def build_dataset(path: str, dbname: str, block_size: int = _DEFAULT_BLOCK_SIZE):
+def build_dataset(
+    path: str,
+    dbname: str,
+    block_size: int = _DEFAULT_BLOCK_SIZE,
+    serializer: Optional[Serializer] = None,
+):
     """Open the dataset in write mode and returns a writer.
 
     Args:
@@ -520,4 +666,4 @@ def build_dataset(path: str, dbname: str, block_size: int = _DEFAULT_BLOCK_SIZE)
         >>>     for i in range(10):
         >>>         writer.write( { "anything you want" } )
     """  # noqa: E501
-    return DatasetBuilder(path, dbname, block_size)
+    return DatasetBuilder(path, dbname, block_size=block_size, serializer=serializer)

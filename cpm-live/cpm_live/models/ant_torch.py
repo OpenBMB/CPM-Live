@@ -116,7 +116,7 @@ class CPMAntTorch(torch.nn.Module):
         position: torch.Tensor,  # (batch, seqlen)
         segment: torch.Tensor,  # (batch, seqlen)
         span: torch.Tensor,  # (batch, seqlen)
-        past_key_values=None  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
+        past_key_values=None,  # num_layers * 2 * (batch, num_heads, seqlen, dim_head)
     ):
 
         batch = input.size(0)
