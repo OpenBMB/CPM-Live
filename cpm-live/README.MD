@@ -24,7 +24,13 @@ CPM-Ant is an open-source Chinese pre-trained language model (PLM) with 10B para
 
 ## Installation
 
-First, please make sure that your environment meets the following requirements:
+First, you need to clone the `cpm-ant` branch of this repository.
+
+```shell
+$ git clone -b cpm-ant --single-branch https://github.com/OpenBMB/CPM-Live.git
+```
+
+Then, please make sure that your environment meets the following requirements:
 
 - python >= 3.7
 - torch >= 1.10
@@ -32,6 +38,7 @@ First, please make sure that your environment meets the following requirements:
 We recommend using [Anaconda](https://www.anaconda.com/) to manage the environment and installing additional dependencies from PyPI:
 
 ```shell
+$ cd CPM-Live/cpm-live
 $ pip install -r requirements.txt
 ```
 
