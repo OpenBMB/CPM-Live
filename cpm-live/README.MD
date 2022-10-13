@@ -21,7 +21,7 @@ We recommend using [Anaconda](https://www.anaconda.com/) to manage the environme
 $ pip install -r requirements.txt
 ```
 
-## Model Checkpoints
+## Model
 
 We release the checkpoint of CPM-Ant+ (10B), and you can download it from [here](https://openbmb.oss-cn-hongkong.aliyuncs.com/model_center/cpm-ant-plus-10b/cpm-ant-plus-10b.zip).
 If you want to compress CPM-Ant+ into smaller models, please check our guidelines in [BMCook](https://github.com/OpenBMB/BMCook/tree/main/cpm_live_example)!
