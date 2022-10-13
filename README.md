@@ -5,7 +5,8 @@
 **Live Training for Open-source Big Models**
 
 <p align="center">
-   <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a>
+   <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
+<br>
 <br>
 </p>
 
@@ -19,11 +20,12 @@
 
 ## Milestones
 
-- **CPM-Ant+** [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)][[Models](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live#model-checkpoints)]
-- **CPM-Ant** [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Models](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://live.openbmb.org/ant)][[Blog](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)]
+- **CPM-Bee** (2022/10/13- ) [[Plan](./plans/CPM-Bee训练计划书.md)]
+- **CPM-Ant+** (2022/08/05-2022/10/12) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live#model-checkpoints)]
+- **CPM-Ant** (2022/05/29-2022/08/05) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://live.openbmb.org/ant)][[Blog](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)][[Plan](./plans/CPM-Ant训练计划书.md)]
 
 ## Training Plan
-Considering the scale of data and computing resources, CPM-Live will start with a 10B model training, which we named CPM-Ant. The training of CPM-Ant will start on May 29, 2022, and the entire training process is expected to last five months.
+Considering the scale of data and computing resources, CPM-Live will start with a 10B model training.
 
 ### During training we will do:
 
