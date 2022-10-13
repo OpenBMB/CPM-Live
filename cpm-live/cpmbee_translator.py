@@ -116,7 +116,7 @@ class Translator:
                 inference_results = self._beam_search.generate(
                     [{"document": doc, "task": "英翻中", "<ans>": ""} for doc in curr_batch],
                     max_length=256,
-                    repetition_coefficient=1.0,
+                    repetition_penalty=1.0,
                 )
                 for idx, res in zip(curr_batch_idx, inference_results):
                     ret[idx] = self._replace_entity(res["<ans>"], replace_table)
@@ -126,7 +126,7 @@ class Translator:
             inference_results = self._beam_search.generate(
                 [{"document": doc, "task": "英翻中", "<ans>": ""} for doc in curr_batch],
                 max_length=256,
-                repetition_coefficient=1.0,
+                repetition_penalty=1.0,
             )
             for idx, res in zip(curr_batch_idx, inference_results):
                 ret[idx] = self._replace_entity(res["<ans>"], replace_table)
@@ -155,7 +155,7 @@ class Translator:
                 inference_results = self._beam_search.generate(
                     [{"document": doc, "task": "中翻英", "<ans>": ""} for doc in curr_batch],
                     max_length=256,
-                    repetition_coefficient=1.0,
+                    repetition_penalty=1.0,
                 )
                 for idx, res in zip(curr_batch_idx, inference_results):
                     ret[idx] = self.tokenizer.unescape(res["<ans>"])
@@ -165,7 +165,7 @@ class Translator:
             inference_results = self._beam_search.generate(
                 [{"document": doc, "task": "中翻英", "<ans>": ""} for doc in curr_batch],
                 max_length=256,
-                repetition_coefficient=1.0,
+                repetition_penalty=1.0,
             )
             for idx, res in zip(curr_batch_idx, inference_results):
                 ret[idx] = self.tokenizer.unescape(res["<ans>"])

@@ -2,10 +2,11 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
-from .utils import BeamHypotheses, repetition_penalty, pad
+from .generation_utils import BeamHypotheses, apply_repetition_penalty
 from ..tokenizers.bee import CPMBeeTokenizer
 from ..models.bee import CPMBee
 from ..training_tasks.bee.pretrain import convert_data_to_id
+from ..utils import pad
 
 
 class CPMBeeGeneration:
@@ -251,7 +252,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
         other_info,
         beam_size=3,
         max_length=100,
-        repetition_coefficient=1.0,
+        repetition_penalty=1.0,
         repetition_window=None,
     ):
         """
@@ -260,7 +261,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
             model_inputs (dict): input ids.
             beam_size (int, optional, defaults to 3): beam size of beam search.
             generate_length (int, optional, defaults to 100): maximum generation length.
-            repetition_coefficient (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
+            repetition_penalty (float, optional, defaults to 1.0): repetition penalty coefficient, 1.0 means no penalty.
             repetition_window (int, optional, defaults to None): window size of repetition penalty, None means that all output tokens are penalized.
         """  # noqa: E501
         # generate_length + 1 for EOS token
@@ -438,12 +439,12 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                         sent_id * beam_size : (sent_id + 1) * beam_size, self.tokenizer.unk_id
                     ] = -10000
 
-            repetition_penalty(
+            apply_repetition_penalty(
                 logits,
                 batch_size,
                 beam_size,
                 input,
-                repetition_coefficient,
+                repetition_penalty,
                 pred_start_index,
                 input.size(-1) - 1,
                 repetition_window,
