@@ -50,7 +50,7 @@
 
 我们的[社区](https://github.com/OpenBMB/CPM-Live/discussions) 基于GitHub Discussions。
 
-阅读[第一篇帖子](https://github.com/OpenBMB/CPM-Live/discussions/1)，开始你对CPM-Live的探索吧！!
+阅读[第一篇帖子](https://github.com/OpenBMB/CPM-Live/discussions/1)，开始你对CPM-Live的探索吧！
 
 
 
