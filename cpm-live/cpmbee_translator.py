@@ -34,22 +34,12 @@ class Translator:
 
     def _auto_cut(self, text: str):
         CUT_TABLE = {
-            ",": 160,
             ".": 100,
             "?": 100,
-            '"': 160,
             "!": 100,
-            ":": 160,
-            "(": 160,
-            ")": 100,
-            "，": 80,
-            "。": 56,
-            "？": 56,
-            "”": 80,
-            "！": 56,
-            "：": 80,
-            "（": 80,
-            "）": 56,
+            "。": 48,
+            "？": 48,
+            "！": 48,
         }
         st = 0
         sub_text = []
@@ -90,6 +80,9 @@ class Translator:
         ret = []
         for token in self.tokenizer.tokenize(text):
             if token.is_special and token.token in table:
+                t = token.token
+                if t.startswith("the "):
+                    t = t[4:]
                 ret.append(table[token.token])
             else:
                 ret.append(token.token)
@@ -115,8 +108,8 @@ class Translator:
             if len(curr_batch) >= self._batch_size:
                 inference_results = self._beam_search.generate(
                     [{"document": doc, "task": "英翻中", "<ans>": ""} for doc in curr_batch],
-                    max_length=256,
-                    repetition_penalty=1.0,
+                    max_length=180,
+                    repetition_coefficient=1.0,
                 )
                 for idx, res in zip(curr_batch_idx, inference_results):
                     ret[idx] = self._replace_entity(res["<ans>"], replace_table)
@@ -125,8 +118,8 @@ class Translator:
         if len(curr_batch) > 0:
             inference_results = self._beam_search.generate(
                 [{"document": doc, "task": "英翻中", "<ans>": ""} for doc in curr_batch],
-                max_length=256,
-                repetition_penalty=1.0,
+                max_length=180,
+                repetition_coefficient=1.0,
             )
             for idx, res in zip(curr_batch_idx, inference_results):
                 ret[idx] = self._replace_entity(res["<ans>"], replace_table)
@@ -136,6 +129,7 @@ class Translator:
 
     def to_eng(self, text: str):
         text = self.tokenizer.escape(text)
+        text = re.sub(r"([^\x00-\x7F])([a-zA-Z])", r"\1 \2", text)
         sub_text = []
         for line in text.split("\n"):
             sub_text.extend(self._auto_cut(line))
@@ -154,8 +148,8 @@ class Translator:
             if len(curr_batch) >= self._batch_size:
                 inference_results = self._beam_search.generate(
                     [{"document": doc, "task": "中翻英", "<ans>": ""} for doc in curr_batch],
-                    max_length=256,
-                    repetition_penalty=1.0,
+                    max_length=180,
+                    repetition_coefficient=1.0,
                 )
                 for idx, res in zip(curr_batch_idx, inference_results):
                     ret[idx] = self.tokenizer.unescape(res["<ans>"])
@@ -164,13 +158,23 @@ class Translator:
         if len(curr_batch) > 0:
             inference_results = self._beam_search.generate(
                 [{"document": doc, "task": "中翻英", "<ans>": ""} for doc in curr_batch],
-                max_length=256,
-                repetition_penalty=1.0,
+                max_length=180,
+                repetition_coefficient=1.0,
             )
             for idx, res in zip(curr_batch_idx, inference_results):
                 ret[idx] = self.tokenizer.unescape(res["<ans>"])
             curr_batch = []
             curr_batch_idx = []
+        
+        is_newline = True
+        for i in range(len(ret)):
+            if ret[i] == "\n":
+                is_newline = True
+            elif is_newline:
+                is_newline = False
+            else:
+                ret[i] = " " + ret[i]
+
         return "".join(ret)
 
 

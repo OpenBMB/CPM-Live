@@ -10,7 +10,7 @@ if __name__ == "__main__":
     ]
 
     config = CPMBeeConfig.from_json_file("config/cpm-bee-10b.json")
-    ckpt_path = "results/cpm_live_checkpoint-5000.pt"
+    ckpt_path = "path/to/checkpoint.pt"
     tokenizer = CPMBeeTokenizer()
     model = CPMBeeTorch(config=config)
 
