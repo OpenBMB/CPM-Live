@@ -4,6 +4,7 @@ from cpm_live.models import CPMBeeTorch, CPMBeeConfig
 from cpm_live.tokenizers import CPMBeeTokenizer
 import torch
 import spacy
+import re
 
 
 def is_chinese(ch: str):
@@ -165,7 +166,7 @@ class Translator:
                 ret[idx] = self.tokenizer.unescape(res["<ans>"])
             curr_batch = []
             curr_batch_idx = []
-        
+
         is_newline = True
         for i in range(len(ret)):
             if ret[i] == "\n":
