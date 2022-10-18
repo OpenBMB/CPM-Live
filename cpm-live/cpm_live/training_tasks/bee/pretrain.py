@@ -968,6 +968,8 @@ class MixedDataset:
             max_unused_blocks = (
                 bmt.distributed.all_reduce(gpu_num_unused_block, op="max").cpu().item()
             )
+            if max_unused_blocks == 0:
+                max_unused_blocks = 1
             gpu_states = torch.full((max_unused_blocks,), -1, dtype=torch.long).cuda()
             gpu_states[:num_unused_block] = v["states"].cuda()
 

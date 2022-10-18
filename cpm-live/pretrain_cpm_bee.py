@@ -242,6 +242,9 @@ def pretrain(
             mem_usage, tim_usage = add_mem_time("backward", mem_usage, tim_usage)
 
             # ===========
+            current_stream = torch.cuda.current_stream()
+            # some reduce ops of distributed parameter were launched on load stream
+            current_stream.wait_stream(bmt.config['load_stream'])
             grad_norm = bmt.optim.clip_grad_norm(
                 optimizer.param_groups, args.clip_grad, scale=optimizer.scale, norm_type=2
             )
