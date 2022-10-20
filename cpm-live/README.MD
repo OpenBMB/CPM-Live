@@ -8,6 +8,13 @@
 
 CPM-Ant+ is an open-source bilingual pre-trained language model (PLM) with 10B parameters, which is the second milestone of the live training process of CPM-Live. CPM-Ant+ is an enhanced version of CPM-Ant. For more details on CPM-Ant, please check [here](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live). The code, log files, and checkpoints of CPM-Ant+ are available under an open license.
 
+## New Features
+
+Compared to CPM-Ant, CPM-Ant+ has several new features:
+
+- **Support English.**  You can use CPM-Ant+ for English text geneartion now!
+- **Support more NLP tasks.** Benefiting from data augmentation techniques used in the pre-training stage, CPM-Ant+ can be used *out-of-the-box* on multiple NLP tasks, including question answering, translation, and extractive summarization.
+
 ## Installation
 
 First, you need to clone the `cpm-ant-plus` branch of this repository.
