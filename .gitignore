@@ -136,7 +136,6 @@ dmypy.json
 *.idx
 *.pt
 
-logs
 data
 data_raw
 results
