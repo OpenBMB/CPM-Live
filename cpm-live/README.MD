@@ -12,8 +12,8 @@ CPM-Ant+ is an open-source bilingual pre-trained language model (PLM) with 10B p
 
 Compared to CPM-Ant, CPM-Ant+ has several new features:
 
-- **Support English.**  You can use CPM-Ant+ for English text geneartion now!
-- **Support more NLP tasks.** Benefiting from data augmentation techniques used in the pre-training stage, CPM-Ant+ can be used *out-of-the-box* on multiple NLP tasks, including question answering, translation, and extractive summarization.
+- **Support English.**  You can use CPM-Ant+ for English text generation now!
+- **Support more NLP tasks.** Benefiting from data augmentation techniques used in the pre-training stage, in addition to text generation, CPM-Ant+ can be used *out-of-the-box* on more NLP tasks, including question answering, translation, and extractive summarization.
 
 ## Installation
 
