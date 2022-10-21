@@ -215,8 +215,14 @@ def convert_data_to_id(
             else:
                 reid_token_ids.append(idx)
                 token_id_subs.append(0)
-        tokens = [tokenizer.bos_id] + reid_token_ids + [tokenizer.eos_id]
-        token_id_subs = [0] + token_id_subs + [0]
+        tokens = [tokenizer.bos_id] + reid_token_ids
+        token_id_subs = [0] + token_id_subs
+        if not seg["need_predict"]:
+            tokens = tokens + [tokenizer.eos_id]
+            token_id_subs = token_id_subs + [0]
+        else:
+            # no eos
+            pass
         begin = len(input_ids)
         input_ids.extend(tokens)
         input_id_subs.extend(token_id_subs)
@@ -564,8 +570,14 @@ class _MixedDatasetBatchPacker:
                         batch_ext_table_ids.append(idx)
                         batch_ext_table_sub.append(idx_sub)
                     tgt_idx = batch_ext_table_map[(idx, idx_sub)] + self.tokenizer.vocab_size
-                if context[i, j] == 0 and idx != self.tokenizer.bos_id and j > 1:
-                    tgt[i, j - 1] = tgt_idx
+                if j > 1 and context[i, j - 1] == 0:
+                    if idx != self.tokenizer.bos_id:
+                        tgt[i, j - 1] = tgt_idx
+                    else:
+                        tgt[i, j - 1] = self.tokenizer.eos_id
+            if context[i, instance_length - 1] == 0:
+                tgt[i, instance_length] = self.tokenizer.eos_id
+
         if len(batch_ext_table_map) == 0:
             # placeholder
             batch_ext_table_ids.append(0)
