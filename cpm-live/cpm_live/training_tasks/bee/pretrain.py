@@ -576,7 +576,7 @@ class _MixedDatasetBatchPacker:
                     else:
                         tgt[i, j - 1] = self.tokenizer.eos_id
             if context[i, instance_length - 1] == 0:
-                tgt[i, instance_length] = self.tokenizer.eos_id
+                tgt[i, instance_length - 1] = self.tokenizer.eos_id
 
         if len(batch_ext_table_map) == 0:
             # placeholder
