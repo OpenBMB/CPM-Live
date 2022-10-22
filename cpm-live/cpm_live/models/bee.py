@@ -20,6 +20,7 @@ import torch
 from ..utils import Config
 from ..layers import Encoder, EmbeddingExt, BucketPositionBias
 import bmtrain as bmt
+from ..utils.gradient_shrink import gradient_shrink
 
 
 class CPMBeeInferenceState(TypedDict):
@@ -261,9 +262,9 @@ class CPMBee(bmt.DistributedModule):
             mask_1d = present_num_segments != 0
             attention_mask = mask_1d.view(batch, 1, len_buffer) & attention_mask
 
-            hidden_states = self.input_embedding(input, input_sub)
+            hidden_states = gradient_shrink(self.input_embedding(input, input_sub))
 
-            position_bias = self.position_bias(position, present_position, segment_bucket)
+            position_bias = gradient_shrink(self.position_bias(position, present_position, segment_bucket))
             hidden_states, present_key_values = self.encoder(
                 hidden_states,
                 attention_mask,
@@ -271,7 +272,7 @@ class CPMBee(bmt.DistributedModule):
                 True,
                 present_buffer,
             )
-            ext_table = self.input_embedding(ext_table_ids, ext_table_sub)
+            ext_table = gradient_shrink(self.input_embedding(ext_table_ids, ext_table_sub))
             logits = self.input_embedding.projection(hidden_states, ext_table)
 
             return (
