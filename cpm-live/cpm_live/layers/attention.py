@@ -72,8 +72,8 @@ class Attention(bmt.DistributedModule):
         len_q = hidden_q.size(1)
         len_k = hidden_kv.size(1)
 
-        h_q = self.project_q(hidden_q)
-        h_k = self.project_k(hidden_kv)
+        h_q = self.project_q(hidden_q) / math.sqrt(math.sqrt(self.dim_head))
+        h_k = self.project_k(hidden_kv) / math.sqrt(math.sqrt(self.dim_head))
         h_v = self.project_v(hidden_kv)
 
         h_q = h_q.view(batch_size, len_q, self.num_heads, self.dim_head).permute(0, 2, 1, 3)
@@ -86,7 +86,7 @@ class Attention(bmt.DistributedModule):
             len_k = h_k.size(-2)
 
         # (b, n_h, len_q, d_h) @ (b, n_h, d_h, len_k) -> (b, n_h, len_q, len_k)
-        score = torch.matmul(h_q, h_k.transpose(-1, -2)) / math.sqrt(self.dim_head)
+        score = torch.matmul(h_q, h_k.transpose(-1, -2)) # / math.sqrt(self.dim_head) moved to line 75~76
         score = score + position_bias
         score = torch.masked_fill(
             score,
