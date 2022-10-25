@@ -86,7 +86,9 @@ class Attention(bmt.DistributedModule):
             len_k = h_k.size(-2)
 
         # (b, n_h, len_q, d_h) @ (b, n_h, d_h, len_k) -> (b, n_h, len_q, len_k)
-        score = torch.matmul(h_q, h_k.transpose(-1, -2)) # / math.sqrt(self.dim_head) moved to line 75~76
+        score = torch.matmul(
+            h_q, h_k.transpose(-1, -2)
+        )  # / math.sqrt(self.dim_head) moved to line 75~76
         score = score + position_bias
         score = torch.masked_fill(
             score,

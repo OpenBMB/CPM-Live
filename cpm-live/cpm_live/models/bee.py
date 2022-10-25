@@ -264,7 +264,9 @@ class CPMBee(bmt.DistributedModule):
 
             hidden_states = gradient_shrink(self.input_embedding(input, input_sub))
 
-            position_bias = gradient_shrink(self.position_bias(position, present_position, segment_bucket))
+            position_bias = gradient_shrink(
+                self.position_bias(position, present_position, segment_bucket)
+            )
             hidden_states, present_key_values = self.encoder(
                 hidden_states,
                 attention_mask,

@@ -439,7 +439,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                         sent_id * beam_size : (sent_id + 1) * beam_size, self.tokenizer.unk_id
                     ] = -10000
                 ext_ids = set()
-                for v in other_info[sent_id]["ext_table"].values():
+                for v in other_info[sent_id]["ext_table"].keys():
                     ext_ids.add(v)
                 for ext_id in range(
                     self.tokenizer.vocab_size, self.tokenizer.vocab_size + ext_table_ids.size(0)
