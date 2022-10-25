@@ -438,6 +438,14 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                     logits[
                         sent_id * beam_size : (sent_id + 1) * beam_size, self.tokenizer.unk_id
                     ] = -10000
+                ext_ids = set()
+                for v in other_info[sent_id]["ext_table"].values():
+                    ext_ids.add(v)
+                for ext_id in range(
+                    self.tokenizer.vocab_size, self.tokenizer.vocab_size + ext_table_ids.size(0)
+                ):
+                    if ext_id not in ext_ids:
+                        logits[sent_id * beam_size : (sent_id + 1) * beam_size, ext_id] = -10000
 
             apply_repetition_penalty(
                 logits,
