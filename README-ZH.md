@@ -5,15 +5,16 @@
 **直播训练开源大模型**
 
 <p align="center">
-   <a href="https://live.openbmb.org/" target="_blank">官方网站</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">计划书</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">讨论区</a> • <a href="./README.md" target="_blank">English</a>
+   <a href="https://live.openbmb.org/playground/" target="_blank">模法表格</a> • <a href="https://live.openbmb.org/" target="_blank">官方网站</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">计划书</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">讨论区</a> • <a href="./README.md" target="_blank">English</a>
 <br>
 </p>
 
 </div>
 
 ## 动态
-- 2022/10/12 中英双语模型 **[CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)** 已经发布！除了能够生成中文/英文文本，现在模型还可以处理问答、摘要和翻译任务！
-- 2022/09/16 **[CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)** 已经发布！
+- 2022/11/19 **[模法表格](https://live.openbmb.org/playground/)上线！** 你可以使用表格以极简方式体验CPM-Bee的各项能力了！
+- 2022/10/12 中英双语模型 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live) 已经发布！除了能够生成中文/英文文本，现在模型还可以处理问答、摘要和翻译任务！
+- 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) 已经发布！
 - 2022/05/29 CPM-Live的训练今天启动! 详情请查看[训练动态](https://live.openbmb.org/home)。
 - 2022/05/25 CPM-Live的[训练计划](./plans/CPM-Live训练计划书.md)现已公布。期待训练开始!
 
