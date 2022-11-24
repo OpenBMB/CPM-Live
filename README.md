@@ -5,7 +5,7 @@
 **Live Training for Open-source Big Models**
 
 <p align="center">
-   <a href="https://live.openbmb.org/playground/" target="_blank">MFTable</a> • <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
+   <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
 <br>
 <br>
 </p>
@@ -13,7 +13,6 @@
 </div>
 
 ## What's New
-- 2022/11/19 **[MFTable](https://live.openbmb.org/playground/), powered by CPM-Bee (under training), is released!** Experience the capabilities of our model in a surprisingly simple way!
 - 2022/10/12 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live), a bilingual model, is released! In addition to generating Chinese/English text, you can now use our model for QA, summarization and translation tasks!
 - 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) is released!
 - 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://live.openbmb.org/home).
