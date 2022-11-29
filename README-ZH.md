@@ -12,8 +12,8 @@
 </div>
 
 ## 动态
-- 2022/10/12 中英双语模型 **[CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)** 已经发布！除了能够生成中文/英文文本，现在模型还可以处理问答、摘要和翻译任务！
-- 2022/09/16 **[CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)** 已经发布！
+- 2022/10/12 中英双语模型 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live) 已经发布！除了能够生成中文/英文文本，现在模型还可以处理问答、摘要和翻译任务！
+- 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) 已经发布！
 - 2022/05/29 CPM-Live的训练今天启动! 详情请查看[训练动态](https://live.openbmb.org/home)。
 - 2022/05/25 CPM-Live的[训练计划](./plans/CPM-Live训练计划书.md)现已公布。期待训练开始!
 
