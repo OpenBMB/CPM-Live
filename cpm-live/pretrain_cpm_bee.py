@@ -348,6 +348,9 @@ def pretrain(
                 log_mgr.write(**train_info)
             if args.tensorboard is not None and bmt.rank() == 0:
                 writer.add_scalar("Loss/train", global_loss, iteration)
+                writer.add_scalar("Optimizer/lr", lr_scheduler.current_lr, iteration)
+                writer.add_scalar("Optimizer/scale", optimizer.scale, iteration)
+                writer.add_scalar("Optimizer/grad_norm", grad_norm.item(), iteration)
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
 
