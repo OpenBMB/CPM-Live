@@ -101,7 +101,7 @@ class FeedForward(bmt.DistributedModule):
             dim_in=dim_ff,
             dim_out=dim_model,
             dtype=dtype,
-            scale_before=True,
+            scale_before=False,
         )
 
     def forward(self, x: torch.Tensor):

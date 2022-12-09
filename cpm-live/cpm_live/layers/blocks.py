@@ -91,7 +91,7 @@ class SelfAttentionBlock(bmt.DistributedModule):
 
         if self.dropout is not None:
             x = self.dropout(x)
-        hidden_states = hidden_states + x
+        hidden_states = (hidden_states + x) / 1.05
 
         if use_cache:
             return hidden_states, current_key_value
@@ -154,7 +154,7 @@ class FFNBlock(torch.nn.Module):
         x = self.ffn(x)
         if self.dropout is not None:
             x = self.dropout(x)
-        hidden_states = hidden_states + x
+        hidden_states = (hidden_states + x) / 1.05
         return hidden_states
 
 
