@@ -27,11 +27,14 @@ if __name__ == "__main__":
     model = CPMAntPlusTorch(config=config)
 
     model.load_state_dict(torch.load(ckpt_path))
-    if args.use_bminf:
-        import bminf
-        model = bminf.wrapper(model, quantization=False, memory_limit=args.memory_limit << 30)
+    if torch.cuda.is_available():
+        if args.use_bminf:
+            import bminf
+            model = bminf.wrapper(model, quantization=False, memory_limit=args.memory_limit << 30)
+        else:
+            model.cuda()
     else:
-        model.cuda()
+        model = model.to(torch.float)
     tokenizer = CPMAntPlusTokenizer()
 
     # use beam search

@@ -35,7 +35,9 @@ class CPMAntGeneration:
         keys = set(input_tensors[0].keys())
         padded = {}
         for key in keys:
-            padded[key] = pad(input_tensors, key, padding_side="left").cuda()
+            padded[key] = pad(input_tensors, key, padding_side="left")
+            if torch.cuda.is_available():
+                padded[key] = padded[key].cuda()
         return padded
 
     def generate(self, text_list, **kwargs):
