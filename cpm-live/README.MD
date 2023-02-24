@@ -72,12 +72,10 @@ If you want to adapt CPM-Ant to your own tasks, we recommend using parameter-eff
 
 #### 1. Install OpenDelta
 
-We install OpenDelta from source. Note that we use the `with_bmtrain` branch, which enables us to conduct *distributed* delta tuning on multiple computing nodes.
+We install OpenDelta from PyPI. 
 
 ```shell
-$ git clone -b with_bmtrain --single-branch https://github.com/thunlp/OpenDelta.git
-$ cd OpenDelta
-$ python setup.py install
+$ pip install opendelta
 ```
 
 #### 2. Load the model
@@ -106,7 +104,7 @@ Using Opendelta, we can insert a delta model (e.g. LoRA) into CPM-Ant with three
 ```python
 from opendelta import LoraModel
 
-delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"])
+delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt")
 delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
 delta_model.log()
 ```

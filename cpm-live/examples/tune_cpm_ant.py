@@ -23,7 +23,7 @@ if __name__ == "__main__":
     model = CPMAnt(config=config)
     bmt.load(model, args.model_path)
     # insert LoRA
-    delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"])
+    delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt")
     delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
     delta_model.log()
 
