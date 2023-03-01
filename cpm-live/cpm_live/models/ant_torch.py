@@ -156,9 +156,9 @@ class CPMAntTorch(torch.nn.Module):
             )
             mask_1d = torch.cat(
                 (
-                    torch.ones(batch, self.prompt_length, device=device).bool(), 
+                    torch.ones(batch, self.prompt_length, device=device).bool(),
                     mask_1d
-                ), 
+                ),
                 dim=1
             )
             attention_mask = (

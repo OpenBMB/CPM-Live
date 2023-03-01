@@ -51,9 +51,9 @@ def cat_prompt(padded_inputs: Dict[str, torch.Tensor], prompt_length: int, task_
     padded_inputs["input"] = torch.cat(
         (
             torch.arange(
-                prompt_length * task_id, 
-                prompt_length * (task_id + 1), 
-                dtype=dtype, 
+                prompt_length * task_id,
+                prompt_length * (task_id + 1),
+                dtype=dtype,
                 device=device
             ).repeat(batch, 1),
             input_ids,
@@ -65,9 +65,9 @@ def cat_prompt(padded_inputs: Dict[str, torch.Tensor], prompt_length: int, task_
             cat_part = torch.ones(batch, prompt_length, dtype=dtype, device=device)
         else:
             cat_part = torch.zeros(batch, prompt_length, dtype=dtype, device=device)
-        
+
         padded_inputs[k] = torch.cat(
-            (cat_part, padded_inputs[k]), 
+            (cat_part, padded_inputs[k]),
             dim=1,
         )
     return padded_inputs
