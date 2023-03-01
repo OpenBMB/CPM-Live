@@ -17,11 +17,11 @@ class CPMAntGeneration:
         input_ids = [j for j in input_ids if j != self.tokenizer.unk_id]
 
         model_inputs["input"] = input_ids
-        model_inputs["length"] = len(model_inputs["input"])
-        model_inputs["position"] = list(range(len(model_inputs["input"])))
-        model_inputs["span"] = [0] * len(model_inputs["input"])
-        model_inputs["context"] = [True] * len(model_inputs["input"])
-        model_inputs["segment"] = [0] * self.prompt_length + [2] * len(input_ids)
+        model_inputs["length"] = len(input_ids)
+        model_inputs["position"] = list(range(len(input_ids)))
+        model_inputs["span"] = [0] * len(input_ids)
+        model_inputs["context"] = [True] * len(input_ids)
+        model_inputs["segment"] = [2] * len(input_ids)
 
         for key in model_inputs:
             model_inputs[key] = torch.tensor(model_inputs[key]).int().unsqueeze(0)

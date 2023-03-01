@@ -60,7 +60,14 @@ def cat_prompt(padded_inputs: Dict[str, torch.Tensor], prompt_length: int, task_
         ),
         dim=1,
     )
-    for k in ["context", "position", "span"]:
+    padded_inputs["position"] = torch.cat(
+            (
+                torch.arange(prompt_length, dtype=dtype, device=device).repeat(batch, 1),
+                padded_inputs["position"],
+            ),
+            dim=1,
+        )
+    for k in ["context", "span", "segment"]:
         if k == "context":
             cat_part = torch.ones(batch, prompt_length, dtype=dtype, device=device)
         else:
