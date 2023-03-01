@@ -197,7 +197,7 @@ class CPMAnt(bmt.DistributedModule):
                 torch.tensor(list(range(seqlen - self.prompt_length))[::-1], device=device)[None, :].repeat(batch, 1)
                 < length[:, None]
             )
-            mask_1d = torch.cat((torch.ones(batch, self.prompt_length).bool(), mask_1d), dim=1)
+            mask_1d = torch.cat((torch.ones(batch, self.prompt_length, device=device).bool(), mask_1d), dim=1)
             attention_mask = (
                 mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask
             )
