@@ -1,2 +1,2 @@
 from .config import Config
-from .data_utils import pad
+from .data_utils import pad, cat_prompt

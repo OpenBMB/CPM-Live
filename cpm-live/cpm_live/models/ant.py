@@ -193,9 +193,17 @@ class CPMAnt(bmt.DistributedModule):
             )
             attention_mask = attention_mask & (span[:, None, :] == span[:, :, None])
             # mask for left paddding
+            seqlen_raw = seqlen - self.prompt_length
             mask_1d = (
-                torch.tensor(list(range(seqlen))[::-1], device=device)[None, :].repeat(batch, 1)
+                torch.tensor(list(range(seqlen_raw))[::-1], device=device)[None, :].repeat(batch, 1)
                 < length[:, None]
+            )
+            mask_1d = torch.cat(
+                (
+                    torch.ones(batch, self.prompt_length, device=device).bool(),
+                    mask_1d
+                ),
+                dim=1
             )
             attention_mask = (
                 mask_1d.view(batch, seqlen, 1) & mask_1d.view(batch, 1, seqlen) & attention_mask
