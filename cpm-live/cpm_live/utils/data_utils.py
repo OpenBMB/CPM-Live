@@ -44,6 +44,7 @@ def pad(orig_items, key, padding_value=0, padding_side="left"):
 
     return tensor
 
+
 def cat_prompt(padded_inputs: Dict[str, torch.Tensor], prompt_length: int, task_id: int = 2):
     input_ids = padded_inputs["input"]
     batch, dtype, device = input_ids.size(0), input_ids.dtype, input_ids.device
