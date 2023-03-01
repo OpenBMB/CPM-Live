@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from .generation_utils import BeamHypotheses, apply_repetition_penalty, top_k_top_p_filtering
-from ..utils import pad
+from ..utils import pad, cat_prompt
 
 
 class CPMAntGeneration:
@@ -11,14 +11,12 @@ class CPMAntGeneration:
         self.tokenizer = tokenizer
         self.prompt_length = prompt_length
 
-    def _convert_to_tensors(self, input_text, task_id=2):
+    def _convert_to_tensors(self, input_text):
         model_inputs = {}
         input_ids = [self.tokenizer.bos_id] + self.tokenizer.encode(input_text)
         input_ids = [j for j in input_ids if j != self.tokenizer.unk_id]
 
-        model_inputs["input"] = [
-            x + self.prompt_length * task_id for x in range(self.prompt_length)
-        ] + input_ids
+        model_inputs["input"] = input_ids
         model_inputs["length"] = len(model_inputs["input"])
         model_inputs["position"] = list(range(len(model_inputs["input"])))
         model_inputs["span"] = [0] * len(model_inputs["input"])
@@ -30,15 +28,18 @@ class CPMAntGeneration:
 
         return model_inputs
 
-    def _process_texts(self, text_list):
+    def _process_texts(self, text_list, task_id=2):
         input_tensors = list(map(self._convert_to_tensors, text_list))
         keys = set(input_tensors[0].keys())
+        # padding
         padded = {}
         for key in keys:
             padded[key] = pad(input_tensors, key, padding_side='left')
             if torch.cuda.is_available():
                 padded[key] = padded[key].cuda()
-        return padded
+        # cat prompt
+        padded_with_prompt = cat_prompt(padded, self.prompt_length, task_id)
+        return padded_with_prompt
 
     def generate(self, text_list, **kwargs):
         model_inputs = self._process_texts(text_list)
