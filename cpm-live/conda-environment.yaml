@@ -16,3 +16,4 @@ dependencies:
     - jieba==0.42
     - tensorboard==2.12
     - tqdm==4.65
+    - opendelta==0.3.2
