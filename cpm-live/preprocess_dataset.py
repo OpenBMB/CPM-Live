@@ -1,4 +1,3 @@
-import os
 from cpm_live.dataset import build_dataset, shuffle_dataset
 import shutil
 from tqdm import tqdm
@@ -23,11 +22,11 @@ def reformat_data(data):
 
 def main():
     args = get_args()
-    with build_dataset("tmp", f"data") as dataset:
+    with build_dataset("tmp", "data") as dataset:
         with open(args.input, "r", encoding="utf-8") as fin:
             for line in tqdm(fin.readlines(), desc=args.input):
                 data = json.loads(line)
-                dataset.write( reformat_data(data) )
+                dataset.write(reformat_data(data))
     shuffle_dataset("tmp", args.output_path, progress_bar=True, output_name=args.output_name)
     shutil.rmtree("tmp")
     return

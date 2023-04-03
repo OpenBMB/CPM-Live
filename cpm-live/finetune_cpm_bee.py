@@ -41,7 +41,9 @@ def get_model(args):
         bmt.init_parameters(model)
     # insert LoRA
     if args.use_delta:
-        delta_model = LoraModel(backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt")
+        delta_model = LoraModel(
+            backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt"
+        )
         delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
         delta_model.log()
     return model
@@ -116,6 +118,7 @@ def evaluation(model, args, tokenizer, loss_func):
         drop_last=args.drop_last,
     )
     eval_losses = []
+    last_data = None
     with torch.no_grad():
         for iteration, data in enumerate(eval_dataloader):
             iteration = iteration + 1
@@ -390,9 +393,13 @@ def finetune(
                 bmt.save(model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch)))
             else:
                 eval_loss_increase += 1
-            bmt.print_rank("| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase))
+            bmt.print_rank(
+                "| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase)
+            )
             if eval_loss_increase == args.early_stop_patience:
-                bmt.print_rank("Early stop with eval loss increases {:2d} times.".format(eval_loss_increase))
+                bmt.print_rank(
+                    "Early stop with eval loss increases {:2d} times.".format(eval_loss_increase)
+                )
                 break
     # end of finetune
 
