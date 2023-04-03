@@ -1,5 +1,5 @@
 #! /bin/bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 GPUS_PER_NODE=4
 
 NNODES=1
@@ -7,8 +7,10 @@ MASTER_ADDR="localhost"
 MASTER_PORT=12345
 
 OPTS=""
+OPTS+=" --use-delta"
 OPTS+=" --model-config config/cpm-bee-10b.json"
-OPTS+=" --dataset=path/to/dataset"
+OPTS+=" --dataset path/to/dataset"
+OPTS+=" --eval_dataset path/to/eval/dataset"
 OPTS+=" --epoch 100"
 OPTS+=" --batch-size 5"
 OPTS+=" --train-iters 100"
@@ -18,7 +20,8 @@ OPTS+=" --save results/"
 OPTS+=" --lr 0.0001"
 OPTS+=" --inspect-iters 100"
 OPTS+=" --warmup-iters 1"
-OPTS+=" --save-epochs 10"
+OPTS+=" --test-interval 1"
+OPTS+=" --early-stop-patience 5"
 OPTS+=" --lr-decay-style noam"
 OPTS+=" --weight-decay 0.01"
 OPTS+=" --clip-grad 1.0"
