@@ -199,6 +199,7 @@ def finetune(
 
     best_eval_loss, eval_loss_increase = 1e9, 0
     global_token_pass = 0.0
+    global_steps = 0
     global_world_size = bmt.world_size()
     dataloader = FinetuneDataset(
         args.dataset,
@@ -215,6 +216,7 @@ def finetune(
         last_data = None
         for iteration, data in enumerate(dataloader):
             iteration = iteration + 1
+            global_steps = global_steps + 1
             skip_this_batch = False
             if data is None:
                 if last_data is None:
@@ -245,7 +247,6 @@ def finetune(
             task_names = data["task_names"]
             # ===========
             optimizer.zero_grad()
-            # torch.cuda.empty_cache()
             mem_usage = {}
             tim_usage = {}
             mem_usage, tim_usage = add_mem_time("init", mem_usage, tim_usage)
@@ -384,23 +385,25 @@ def finetune(
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
 
-        # end of epoch
-        if args.save is not None and epoch % args.test_interval == 0:
-            eval_loss = evaluation(model, args, tokenizer, loss_func)
-            if eval_loss < best_eval_loss:
-                best_eval_loss = eval_loss
-                eval_loss_increase = 0
-                bmt.save(model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch)))
-            else:
-                eval_loss_increase += 1
-            bmt.print_rank(
-                "| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase)
-            )
-            if eval_loss_increase == args.early_stop_patience:
+            # evaluation
+            if args.save is not None and global_steps % args.test_interval == 0:
+                eval_loss = evaluation(model, args, tokenizer, loss_func)
+                if eval_loss < best_eval_loss:
+                    best_eval_loss = eval_loss
+                    eval_loss_increase = 0
+                    bmt.save(
+                        model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch))
+                    )
+                else:
+                    eval_loss_increase += 1
                 bmt.print_rank(
-                    "Early stop with eval loss increases {:2d} times.".format(eval_loss_increase)
+                    "| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase)
                 )
-                break
+                if eval_loss_increase == args.early_stop_patience:
+                    bmt.print_rank(
+                        "Early stop with eval loss increases {:2d} times.".format(eval_loss_increase)
+                    )
+                    break
     # end of finetune
 
 
