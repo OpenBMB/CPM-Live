@@ -401,7 +401,8 @@ def finetune(
                 )
                 if eval_loss_increase == args.early_stop_patience:
                     bmt.print_rank(
-                        "Early stop with eval loss increases {:2d} times.".format(eval_loss_increase)
+                        "Early stop with eval loss increases {:2d} times."
+                        .format(eval_loss_increase)
                     )
                     break
     # end of finetune
