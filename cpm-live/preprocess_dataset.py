@@ -25,11 +25,11 @@ def main():
     args = get_args()
     files = os.listdir(args.input)
     for ds in files:
-        with build_dataset("tmp", f"data") as dataset:
+        with build_dataset("tmp", "data") as dataset:
             with open(os.path.join(args.input, ds), "r", encoding="utf-8") as fin:
-                for line in tqdm(fin.readlines(), desc=args.input):
+                for line in tqdm(fin.readlines(), desc=os.path.join(args.input, ds)):
                     data = json.loads(line)
-                    dataset.write( reformat_data(data) )
+                    dataset.write(reformat_data(data))
         shuffle_dataset(
             "tmp",
             os.path.join(args.output_path, ds.split(".")[0]),
