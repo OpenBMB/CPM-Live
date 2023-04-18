@@ -18,6 +18,7 @@ from typing import Dict, List, Union
 import torch
 import bmtrain as bmt
 import os
+from opendelta import LoraModel
 from cpm_live.arguments import get_args
 
 from cpm_live.models import CPMBee, CPMBeeConfig
@@ -38,6 +39,13 @@ def get_model(args):
         bmt.load(model, args.load)
     else:
         bmt.init_parameters(model)
+    # insert LoRA
+    if args.use_delta:
+        delta_model = LoraModel(
+            backbone_model=model, modified_modules=["project_q", "project_v"], backend="bmt"
+        )
+        delta_model.freeze_module(exclude=["deltas"], set_state_dict=True)
+        delta_model.log()
     return model
 
 
@@ -98,6 +106,78 @@ def add_mem_time(info, mem_usage, tim_usage):
     return mem_usage, tim_usage
 
 
+def evaluation(model, args, tokenizer, loss_func):
+    bmt.print_rank("evaluation begins...")
+    eval_dataloader = FinetuneDataset(
+        args.eval_dataset,
+        1,
+        args.max_length,
+        tokenizer,
+        max_depth=8,
+        task_name=args.task_name,
+        drop_last=args.drop_last,
+    )
+    eval_losses = []
+    last_data = None
+    with torch.no_grad():
+        for iteration, data in enumerate(eval_dataloader):
+            iteration = iteration + 1
+            skip_this_batch = False
+            if data is None:
+                if last_data is None:
+                    raise RuntimeError(
+                        "Dataset is too small, please use a smaller batch size or sequence length!"
+                    )
+                data = last_data
+                skip_this_batch = True
+            else:
+                last_data = data
+
+            input_ids = torch.from_numpy(data["inputs"]).cuda().to(torch.int32)
+            input_ids_sub = torch.from_numpy(data["inputs_sub"]).cuda().to(torch.int32)
+            input_length = torch.from_numpy(data["length"]).cuda().to(torch.int32)
+            input_context = torch.from_numpy(data["context"]).cuda().bool()
+            input_sample_ids = torch.from_numpy(data["sample_ids"]).cuda().to(torch.int32)
+            input_num_segments = torch.from_numpy(data["num_segments"]).cuda().to(torch.int32)
+            input_segment_ids = torch.from_numpy(data["segment_ids"]).cuda().to(torch.int32)
+            input_segment_rel_offset = (
+                torch.from_numpy(data["segment_rel_offset"]).cuda().to(torch.int32)
+            )
+            input_segment_rel = torch.from_numpy(data["segment_rel"]).cuda().to(torch.int32)
+            input_span = torch.from_numpy(data["spans"]).cuda().to(torch.int32)
+            targets = torch.from_numpy(data["target"]).cuda().to(torch.int32)
+            ext_table_ids = torch.from_numpy(data["ext_ids"]).cuda().to(torch.int32)
+            ext_table_sub = torch.from_numpy(data["ext_sub"]).cuda().to(torch.int32)
+            # ===========
+            mem_usage = {}
+            tim_usage = {}
+            mem_usage, tim_usage = add_mem_time("init", mem_usage, tim_usage)
+
+            # ===========
+            logits, _ = model(
+                input_ids,
+                input_ids_sub,
+                input_length,
+                input_context,
+                input_sample_ids,
+                input_num_segments,
+                input_segment_ids,
+                input_segment_rel_offset,
+                input_segment_rel,
+                input_span,
+                ext_table_ids,
+                ext_table_sub,
+            )
+
+            loss = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
+            if skip_this_batch:
+                loss = loss * 0
+            eval_losses.append(bmt.sum_loss(loss))
+
+        overall_loss = torch.stack(eval_losses).mean().item()
+    return overall_loss
+
+
 def finetune(
     args,
     tokenizer: CPMBeeTokenizer,
@@ -117,7 +197,9 @@ def finetune(
             os.makedirs(args.tensorboard)
         writer = SummaryWriter(log_dir=args.tensorboard)
 
+    best_eval_loss, eval_loss_increase = 1e9, 0
     global_token_pass = 0.0
+    global_steps = 0
     global_world_size = bmt.world_size()
     dataloader = FinetuneDataset(
         args.dataset,
@@ -134,6 +216,7 @@ def finetune(
         last_data = None
         for iteration, data in enumerate(dataloader):
             iteration = iteration + 1
+            global_steps = global_steps + 1
             skip_this_batch = False
             if data is None:
                 if last_data is None:
@@ -164,7 +247,6 @@ def finetune(
             task_names = data["task_names"]
             # ===========
             optimizer.zero_grad()
-            # torch.cuda.empty_cache()
             mem_usage = {}
             tim_usage = {}
             mem_usage, tim_usage = add_mem_time("init", mem_usage, tim_usage)
@@ -303,9 +385,26 @@ def finetune(
                 for task_name, loss in task_loss_map.items():
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
 
-        # end of epoch
-        if args.save is not None and epoch % args.save_epochs == 0:
-            bmt.save(model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch)))
+            # evaluation
+            if args.save is not None and global_steps % args.test_interval == 0:
+                eval_loss = evaluation(model, args, tokenizer, loss_func)
+                if eval_loss < best_eval_loss:
+                    best_eval_loss = eval_loss
+                    eval_loss_increase = 0
+                    bmt.save(
+                        model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch))
+                    )
+                else:
+                    eval_loss_increase += 1
+                bmt.print_rank(
+                    "| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase)
+                )
+                if eval_loss_increase == args.early_stop_patience:
+                    bmt.print_rank(
+                        "Early stop with eval loss increases {:2d} times."
+                        .format(eval_loss_increase)
+                    )
+                    break
     # end of finetune
 
 
