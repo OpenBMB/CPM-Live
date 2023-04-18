@@ -30,7 +30,12 @@ def main():
                 for line in tqdm(fin.readlines(), desc=args.input):
                     data = json.loads(line)
                     dataset.write( reformat_data(data) )
-        shuffle_dataset("tmp", os.path.join(args.output_path, ds.split(".")[0]), progress_bar=True, output_name=args.output_name)
+        shuffle_dataset(
+            "tmp",
+            os.path.join(args.output_path, ds.split(".")[0]),
+            progress_bar=True,
+            output_name=args.output_name
+        )
         shutil.rmtree("tmp")
     return
 
