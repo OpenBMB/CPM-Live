@@ -614,7 +614,9 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                         if (k_buf, v_buf) == (None, None):
                             nw_buf_list.append((k_buf, v_buf))
                         else:
-                            nw_buf_list.append((k_buf[beam_reorder_idx, :], v_buf[beam_reorder_idx, :]))
+                            nw_buf_list.append(
+                                (k_buf[beam_reorder_idx, :], v_buf[beam_reorder_idx, :])
+                            )
                     past_key_values[kw] = nw_buf_list
                 else:
                     past_key_values[kw] = past_key_values[kw][beam_reorder_idx, :]
