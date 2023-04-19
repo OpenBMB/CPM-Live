@@ -609,6 +609,7 @@ class CPMBeeBeamSearch(CPMBeeGeneration):
                 if kw == "buffer":
                     buf_list = past_key_values[kw]
                     nw_buf_list = []
+                    buf_list = [item if item is not None else (None, None) for item in buf_list]
                     for k_buf, v_buf in buf_list:
                         if (k_buf, v_buf) == (None, None):
                             nw_buf_list.append((k_buf, v_buf))
