@@ -381,9 +381,9 @@ def finetune(
 
             # write log here
             if args.tensorboard is not None and bmt.rank() == 0:
-                writer.add_scalar("Loss/train", task_loss_map[args.task_name], iteration)
+                writer.add_scalar("Loss/train", task_loss_map[args.task_name], global_steps)
                 for task_name, loss in task_loss_map.items():
-                    writer.add_scalar("Loss/train/{}".format(task_name), loss, iteration)
+                    writer.add_scalar("Loss/train/{}".format(task_name), loss, global_steps)
 
             # evaluation
             if args.save is not None and global_steps % args.test_interval == 0:
