@@ -51,7 +51,7 @@ def get_model(args):
 
 def get_optimizer(args, model):
     optimizer = bmt.optim.AdamOffloadOptimizer(
-        model.parameters(), weight_decay=args.weight_decay, scale=args.loss_scale
+        model.parameters(), weight_decay=args.weight_decay
     )
     return optimizer
 
@@ -76,12 +76,18 @@ def setup_model_and_optimizer(args):
     optimizer = get_optimizer(args, model)
     lr_scheduler = get_learning_rate_scheduler(args, optimizer)
     bmt.synchronize()
-    return tokenizer, model, optimizer, lr_scheduler
+    optim_manager = bmt.optim.OptimManager(
+        loss_scale=args.loss_scale,
+        loss_scale_factor=2,
+        loss_scale_steps=512,
+    )
+    optim_manager.add_optimizer(optimizer, lr_scheduler)
+    return tokenizer, model, optimizer, lr_scheduler, optim_manager
 
 
 def initialize():
     args = get_args(finetune=True)
-    bmt.init_distributed(seed=args.seed, loss_scale_factor=2, loss_scale_steps=512)
+    bmt.init_distributed(seed=args.seed)
     if args.save is not None:
         os.makedirs(args.save, exist_ok=True)
     return args
@@ -184,6 +190,7 @@ def finetune(
     model: CPMBee,
     optimizer: bmt.optim.AdamOffloadOptimizer,
     lr_scheduler: bmt.lr_scheduler.WarmupLRScheduler,
+    optim_manager: bmt.optim.OptimManager,
 ):
 
     average_time = bmt.utils.AverageRecorder()
@@ -246,7 +253,7 @@ def finetune(
             task_ids = torch.from_numpy(data["task_ids"]).cuda().to(torch.int32)
             task_names = data["task_names"]
             # ===========
-            optimizer.zero_grad()
+            optim_manager.zero_grad()
             mem_usage = {}
             tim_usage = {}
             mem_usage, tim_usage = add_mem_time("init", mem_usage, tim_usage)
@@ -273,16 +280,12 @@ def finetune(
             mem_usage, tim_usage = add_mem_time("forward", mem_usage, tim_usage)
 
             # ===========
-            loss = optimizer.loss_scale(loss)
-            loss.backward()
+            optim_manager.backward(loss)
             mem_usage, tim_usage = add_mem_time("backward", mem_usage, tim_usage)
 
             # ===========
-            grad_norm = bmt.optim.clip_grad_norm(
-                optimizer.param_groups, args.clip_grad, scale=optimizer.scale, norm_type=2
-            )
-
-            bmt.optim_step(optimizer, lr_scheduler)
+            grad_norm = optim_manager.clip_grad_norm(optimizer.param_groups, max_norm=1.0)
+            optim_manager.step()
             mem_usage, tim_usage = add_mem_time("optim", mem_usage, tim_usage)
 
             # ==========
@@ -335,7 +338,7 @@ def finetune(
                 "iteration": iteration,
                 "loss": task_loss_map[args.task_name],
                 "lr": lr_scheduler.current_lr,
-                "lr_scale": int(optimizer.scale),
+                "lr_scale": int(optim_manager.loss_scale),
                 "time_usage": tim_usage,
                 "mem_usage": mem_usage,
                 "avg_time": avg_time,
@@ -358,7 +361,7 @@ def finetune(
                     iteration,
                     task_loss_map[args.task_name],
                     lr_scheduler.current_lr,
-                    int(optimizer.scale),
+                    int(optim_manager.loss_scale),
                     avg_time,
                     input_length.float().mean() / args.max_length,
                     (targets >= 0).sum(-1).float().mean() / args.max_length,
@@ -409,8 +412,8 @@ def finetune(
 
 def main():
     args = initialize()
-    tokenizer, model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-    finetune(args, tokenizer, model, optimizer, lr_scheduler)
+    tokenizer, model, optimizer, lr_scheduler, optim_manager = setup_model_and_optimizer(args)
+    finetune(args, tokenizer, model, optimizer, lr_scheduler, optim_manager)
 
 
 if __name__ == "__main__":
