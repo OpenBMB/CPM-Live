@@ -117,7 +117,12 @@ def add_finetune_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group("finetune", "fintune configurations")
     group.add_argument("--epoch", type=int, default=1, help="number of training epochs")
     group.add_argument("--task-name", type=str, default="task", help="name of training task")
-    group.add_argument("--use-delta", type=bool, default=True, help="use delta tuning or not")
+    group.add_argument(
+        "--use-delta",
+        action="store_true",
+        default=False,
+        help="use delta tuning or not"
+    )
     group.add_argument("--eval_dataset", type=str, help="path to eval dataset")
     group.add_argument(
         "--drop-last",
