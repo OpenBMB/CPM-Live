@@ -1,21 +1,28 @@
-import os, sys
+import os
+import sys
 from typing import Any, Dict, Optional, Tuple, Union
 import datetime
 import json
 import logging
 import bmtrain as bmt
 
-# Set up the common logger
 
+# Set up the common logger
 def _get_logger():
     log = logging.getLogger('__name__')
     log.setLevel(logging.INFO)
     console_handle = logging.StreamHandler(sys.stdout)
     node_name = os.getenv("NODE_NAME", str(bmt.rank()))
-    console_handle.setFormatter(logging.Formatter('[%(levelname)s][%(asctime)s][{}][%(filename)s:%(lineno)d:%(process)d] - %(message)s'.format(node_name),
-                                                  datefmt='%Y-%m-%d %H:%M:%S'))
+    console_handle.setFormatter(
+        logging.Formatter(
+            '[%(levelname)s][%(asctime)s][{}][%(filename)s:%(lineno)d:%(process)d] - %(message)s'
+            .format(node_name),
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+    )
     log.addHandler(console_handle)
     return log
+
 
 logger = _get_logger()
 

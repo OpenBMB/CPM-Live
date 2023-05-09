@@ -1,5 +1,6 @@
 [tool.pyright]
 include = ["cpm_live"]
+useLibraryCodeForTypes = false
 
 [tool.black]
 line-length = 100

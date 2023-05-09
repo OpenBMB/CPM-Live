@@ -6,8 +6,7 @@ import bmtrain as bmt
 import json
 from cpm_live.models import CPMBee
 from .log import logger
-from typing import List
-import fcntl
+from typing import List, Optional
 
 
 def rename_if_exists(file_path):
@@ -22,8 +21,9 @@ def rename_if_exists(file_path):
         os.rename(file_path, new_file_path)
         logger.info(f"File '{file_name}' already exists. Renamed to '{new_file_name}'")
     except Exception as e:
-        logger.warn("rename file failed,file_path={file_path}, new_file_path={new_file_path},err={err}".
-                    format(file_path=file_path, new_file_path=new_file_path, err=str(e)))
+        logger.warn(
+            "rename file failed,file_path={file_path}, new_file_path={new_file_path},err={err}"
+            .format(file_path=file_path, new_file_path=new_file_path, err=str(e)))
 
 
 def rename_if_exists_decorator(func):
@@ -35,21 +35,21 @@ def rename_if_exists_decorator(func):
 
 
 @rename_if_exists_decorator
-def bmt_save(file_path: str, model: CPMBee, export_files: List[str] = None):
+def bmt_save(file_path: str, model: CPMBee, export_files: Optional[List[str]] = None):
     bmt.save(model, file_path)
     if export_files is not None:
         export_files.append(file_path)
 
 
 @rename_if_exists_decorator
-def torch_save(file_path: str, obj: object, export_files: List[str] = None):
+def torch_save(file_path: str, obj: object, export_files: Optional[List[str]] = None):
     torch.save(obj, file_path)
     if export_files is not None:
         export_files.append(file_path)
 
 
 @rename_if_exists_decorator
-def json_save(file_path: str, obj: object, export_files: List[str] = None):
+def json_save(file_path: str, obj: object, export_files: Optional[List[str]] = None):
     with open(file_path, "w") as data_f:
         json.dump(obj, data_f)
     if export_files is not None:

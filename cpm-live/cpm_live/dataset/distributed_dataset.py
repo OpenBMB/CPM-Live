@@ -130,6 +130,7 @@ def _filtered_range(
     else:
         return [i for i in range(begin, end, world_size)]
 
+
 # for some bugs that may exist in hdfs
 class SafeFile:
 
@@ -139,7 +140,7 @@ class SafeFile:
         self._fp = None
         self.open_file(fname, mode)
 
-    def read(self, size = -1):
+    def read(self, size=-1):
         if self._fp is None:
             raise RuntimeError("Dataset is closed")
         try:
@@ -163,11 +164,11 @@ class SafeFile:
             self.open_file(self.fname, self.mode, self.offset)
             return self.tell()
 
-    def seek(self, offset, whence = 0):
+    def seek(self, offset, whence=0):
         if self._fp is None:
             raise RuntimeError("Dataset is closed")
         try:
-            res = self._fp.seek(offset, whence) 
+            res = self._fp.seek(offset, whence)
             self.offset = self._fp.tell()
             return res
         except Exception as e:
@@ -179,11 +180,11 @@ class SafeFile:
         if self._fp is not None:
             try:
                 self._fp.close()
-            except Exception as e:
+            except Exception:
                 pass
         self._fp = None
 
-    def open_file(self, fname, mode, offset = None):
+    def open_file(self, fname, mode, offset=None):
         if not os.path.exists(fname):
             raise RuntimeError("Dataset does not exist")
         try:
@@ -390,7 +391,7 @@ class DistributedDataset:
         if len(self._unused_block) == 0:
             self._prepare_new_epoch()
             if len(self._unused_block) == 0:
-                raise RuntimeError("Empty dataset".format(self._path))
+                raise RuntimeError("Empty dataset {}".format(self._path))
 
         mn_block: int = self._unused_block.pop()
         return mn_block
@@ -517,13 +518,15 @@ class DistributedDataset:
                         f_info = self._get_block_file(self._curr_block)
                         self._open_file(
                             f_info.file_name,
-                            (self._curr_block - f_info.block_begin) * f_info.block_size + inblock_offset,
+                            (self._curr_block - f_info.block_begin)
+                            * f_info.block_size
+                            + inblock_offset,
                         )
                         self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
                         break
                     except Exception:
                         print("Error: reading block!")
-                        time.sleep(10)                    
+                        time.sleep(10)
         # end
         self._update_states()
 
