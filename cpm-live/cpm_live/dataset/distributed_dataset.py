@@ -24,6 +24,7 @@ import json
 from .serializer import Serializer, PickleSerializer
 import random
 import string
+import time
 
 
 def _random_string():
@@ -90,21 +91,33 @@ class FileInfo:
 
 def _read_info_list(meta_path: str) -> List[FileInfo]:
     info: List[FileInfo] = []
-    with open(meta_path, "r", encoding="utf-8") as f:
-        for line in f.readlines():
-            line = line.strip()
-            if len(line) > 0:
-                info.append(FileInfo().loads(line))
-    return info
+    while True:
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    if len(line) > 0:
+                        info.append(FileInfo().loads(line))
+            return info
+        except Exception as e:
+            print("Error: reading info list in _read_info_list!,meta_path={path}, err={err}".
+                  format(path=meta_path, err=str(e)))
+            time.sleep(10)
 
 
 def _write_info_list(meta_path: str, info: List[FileInfo]):
     base_path = os.path.dirname(meta_path)
     random_fname = os.path.join(base_path, ".meta.bin.%s" % _random_string())
-    with open(random_fname, "w", encoding="utf-8") as f:
-        for v in info:
-            f.write(v.dumps() + "\n")
-    os.rename(random_fname, meta_path)
+    while True:
+        try:
+            with open(random_fname, "w", encoding="utf-8") as f:
+                for v in info:
+                    f.write(v.dumps() + "\n")
+            os.rename(random_fname, meta_path)
+            return
+        except Exception:
+            print("Error: writing info list!")
+            time.sleep(10)
 
 
 def _filtered_range(
@@ -116,6 +129,74 @@ def _filtered_range(
         return [i for i in range(begin, end, world_size) if i in filter_set]
     else:
         return [i for i in range(begin, end, world_size)]
+
+# for some bugs that may exist in hdfs
+class SafeFile:
+
+    def __init__(self, fname, mode):
+        self.fname = None
+        self.mode = None
+        self._fp = None
+        self.open_file(fname, mode)
+
+    def read(self, size = -1):
+        if self._fp is None:
+            raise RuntimeError("Dataset is closed")
+        try:
+            res = self._fp.read(size)
+            self.offset = self._fp.tell()
+            return res
+        except Exception as e:
+            print("Error {}: reading blocks in read {}!".format(e, self.fname))
+            self.open_file(self.fname, self.mode, self.offset)
+            return self.read(size)
+
+    def tell(self):
+        if self._fp is None:
+            raise RuntimeError("Dataset is closed")
+        try:
+            res = self._fp.tell()
+            self.offset = res
+            return res
+        except Exception as e:
+            print("Error {}: reading blocks in tell {}!".format(e, self.fname))
+            self.open_file(self.fname, self.mode, self.offset)
+            return self.tell()
+
+    def seek(self, offset, whence = 0):
+        if self._fp is None:
+            raise RuntimeError("Dataset is closed")
+        try:
+            res = self._fp.seek(offset, whence) 
+            self.offset = self._fp.tell()
+            return res
+        except Exception as e:
+            print("Error {}: reading blocks in seek {}!".format(e, self.fname))
+            self.open_file(self.fname, self.mode, self.offset)
+            return self.seek(offset, whence)
+
+    def close(self):
+        if self._fp is not None:
+            try:
+                self._fp.close()
+            except Exception as e:
+                pass
+        self._fp = None
+
+    def open_file(self, fname, mode, offset = None):
+        if not os.path.exists(fname):
+            raise RuntimeError("Dataset does not exist")
+        try:
+            self.fname = fname
+            self.mode = mode
+            self._fp = open(fname, mode)
+            if offset is not None:
+                self._fp.seek(offset, io.SEEK_SET)
+            self.offset = self._fp.tell()
+        except Exception as e:
+            print("Error {}: reading blocks in open_file {}!".format(e, self.fname))
+            time.sleep(10)
+            self.open_file(fname, mode, offset)
 
 
 class DistributedDataset:
@@ -181,7 +262,15 @@ class DistributedDataset:
     def _update_states(self, fast_skip: bool = True):
         meta_path = os.path.join(self._path, "meta.bin")
 
-        mod_time = os.stat(meta_path).st_mtime
+        while True:
+            try:
+                mod_time = os.stat(meta_path).st_mtime
+                break
+            except Exception as e:
+                print("Error: reading info list in DistributedDataset._update_states, "
+                      "meta_path={path}, err={err}!".format(path=meta_path, err=str(e)))
+                time.sleep(10)
+
         if self._last_mod_time < mod_time:
             # file changed
             pass
@@ -285,7 +374,6 @@ class DistributedDataset:
         if self._max_repeat_times is not None:
             if self._repeat_times >= self._max_repeat_times:
                 raise EOFError("End of dataset")
-        self._repeat_times += 1
         nw_unused_block: List[int] = []
         for v in self._file_info:
             if not v.mask:
@@ -295,13 +383,14 @@ class DistributedDataset:
         if self._shuffle:
             random.shuffle(nw_unused_block)
         self._unused_block = nw_unused_block
+        self._repeat_times += 1
 
     def _get_next_block(self):
         self._update_states()
         if len(self._unused_block) == 0:
             self._prepare_new_epoch()
             if len(self._unused_block) == 0:
-                raise RuntimeError("Empty dataset")
+                raise RuntimeError("Empty dataset".format(self._path))
 
         mn_block: int = self._unused_block.pop()
         return mn_block
@@ -422,13 +511,19 @@ class DistributedDataset:
             if curr_block == -1:
                 self._curr_block = None
             else:
-                self._curr_block = curr_block
-                f_info = self._get_block_file(self._curr_block)
-                self._open_file(
-                    f_info.file_name,
-                    (self._curr_block - f_info.block_begin) * f_info.block_size + inblock_offset,
-                )
-                self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
+                while True:
+                    try:
+                        self._curr_block = curr_block
+                        f_info = self._get_block_file(self._curr_block)
+                        self._open_file(
+                            f_info.file_name,
+                            (self._curr_block - f_info.block_begin) * f_info.block_size + inblock_offset,
+                        )
+                        self._unused_block = block_states[self._rank, :num_unused_blocks].tolist()
+                        break
+                    except Exception:
+                        print("Error: reading block!")
+                        time.sleep(10)                    
         # end
         self._update_states()
 
@@ -440,11 +535,11 @@ class DistributedDataset:
             if self._fp is not None:
                 self._fp.close()
                 self._curr_fname = None
-            self._fp = open(self._get_file_path(fname), "rb")
+            # self._fp = open(self._get_file_path(fname), "rb")
+            self._fp = SafeFile(self._get_file_path(fname), "rb")
             self._curr_fname = fname
         else:
             assert self._fp is not None, "Unexpected error"
-
         self._fp.seek(offset, io.SEEK_SET)  # move to block
 
     def read(self):
@@ -462,6 +557,7 @@ class DistributedDataset:
                 )
                 self._curr_block = next_block_id
             except FileNotFoundError:
+                print("ERR: reading again!")
                 self._mask_file(f_info)
                 return self.read()  # read again
 

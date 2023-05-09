@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from typing_extensions import TypedDict
 from ...dataset import DistributedDataset
 from ...tokenizers import CPMBeeTokenizer
+from ...utils.config import load_dataset_config
 import numpy as np
 import time
 from numpy.typing import NDArray
@@ -407,16 +408,20 @@ class _MixedDatasetBatchPacker:
         ds = config["dataset"]
         transforms = config["transforms"]
         if isinstance(transforms, str):
-            if not os.path.exists(transforms):
-                raise RuntimeError("transform script file not exists")
-            # load transform script
-            transform_func = self._ensure_transform_function(_dataset_identity(config), transforms)
-            seed = random.random()
-
+            while True:
+                try:
+                    if not os.path.exists(transforms):
+                        raise RuntimeError("transform script file {} not exists".format(transforms))
+                    # load transform script
+                    transform_func = self._ensure_transform_function(_dataset_identity(config), transforms)
+                    seed = random.random()
+                    break
+                except Exception as e:
+                    print(e)
+                    time.sleep(10)
             def _transform(data: CPMBeeInputType):
                 r = random.Random(seed)
                 return transform_func(data, num_incontext, r)
-
             transform = _transform
         elif len(transforms) == 0:
             transform = None
@@ -695,19 +700,27 @@ class _MixedDatasetConfigMananger:
         self._last_m = 0
 
     def changed(self):
-        m_time = os.stat(self._config_path).st_mtime
-        if m_time > self._last_m:
-            # try to load new config
+        while  True:
             try:
-                self._config = json.load(open(self._config_path, "r", encoding="utf-8"))
-            except Exception:
-                # failed to load config
-                return False
+                m_time = os.stat(self._config_path).st_mtime
+                if m_time > self._last_m:
+                    # try to load new config
+                    try:
+                        self._config = load_dataset_config(self._config_path)
+                    except Exception as e:
+                        # failed to load config
+                        print("Error: load new config in changed, self._config_path={path}, err={err}".format(
+                            path=self._config_path, err=str(e)))
 
-            # new config loaded
-            self._last_m = m_time
-            return True
-        return False
+                        return False
+                    # new config loaded
+                    self._last_m = m_time
+                    return True
+                return False
+            except Exception as e:
+                print("Error: reading info list in _MixedDatasetConfigMananger.changed!, "
+                      "elf._config_path={path}, err={err}".format(path=self._config_path, err=str(e)))
+                time.sleep(30)
 
     def get_config(self) -> List[_MixedDatasetConfig]:
         if self._config is None:
