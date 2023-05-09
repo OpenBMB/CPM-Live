@@ -14,7 +14,6 @@
 # limitations under the License.
 
 from collections import OrderedDict
-import json
 import multiprocessing
 import os
 from queue import Empty
@@ -411,14 +410,19 @@ class _MixedDatasetBatchPacker:
             while True:
                 try:
                     if not os.path.exists(transforms):
-                        raise RuntimeError("transform script file {} not exists".format(transforms))
+                        raise RuntimeError(
+                            "transform script file {} not exists".format(transforms)
+                        )
                     # load transform script
-                    transform_func = self._ensure_transform_function(_dataset_identity(config), transforms)
+                    transform_func = self._ensure_transform_function(
+                        _dataset_identity(config), transforms
+                    )
                     seed = random.random()
                     break
                 except Exception as e:
                     print(e)
                     time.sleep(10)
+
             def _transform(data: CPMBeeInputType):
                 r = random.Random(seed)
                 return transform_func(data, num_incontext, r)
@@ -700,7 +704,7 @@ class _MixedDatasetConfigMananger:
         self._last_m = 0
 
     def changed(self):
-        while  True:
+        while True:
             try:
                 m_time = os.stat(self._config_path).st_mtime
                 if m_time > self._last_m:
@@ -709,8 +713,11 @@ class _MixedDatasetConfigMananger:
                         self._config = load_dataset_config(self._config_path)
                     except Exception as e:
                         # failed to load config
-                        print("Error: load new config in changed, self._config_path={path}, err={err}".format(
-                            path=self._config_path, err=str(e)))
+                        print(
+                            "Error: load new config in changed, "
+                            "self._config_path={path}, err={err}"
+                            .format(path=self._config_path, err=str(e))
+                        )
 
                         return False
                     # new config loaded
@@ -719,7 +726,8 @@ class _MixedDatasetConfigMananger:
                 return False
             except Exception as e:
                 print("Error: reading info list in _MixedDatasetConfigMananger.changed!, "
-                      "elf._config_path={path}, err={err}".format(path=self._config_path, err=str(e)))
+                      "self._config_path={path}, err={err}"
+                      .format(path=self._config_path, err=str(e)))
                 time.sleep(30)
 
     def get_config(self) -> List[_MixedDatasetConfig]:
