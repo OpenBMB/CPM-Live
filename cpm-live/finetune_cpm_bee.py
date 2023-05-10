@@ -391,6 +391,8 @@ def finetune(
             # evaluation
             if args.save is not None and global_steps % args.test_interval == 0:
                 eval_loss = evaluation(model, args, tokenizer, loss_func)
+                if args.tensorboard is not None and bmt.rank() == 0:
+                    writer.add_scalar("Loss/eval", eval_loss, global_steps)
                 if eval_loss < best_eval_loss:
                     best_eval_loss = eval_loss
                     eval_loss_increase = 0
