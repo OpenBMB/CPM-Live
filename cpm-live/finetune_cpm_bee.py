@@ -389,26 +389,26 @@ def finetune(
                     writer.add_scalar("Loss/train/{}".format(task_name), loss, global_steps)
 
             # evaluation
-            if args.save is not None and global_steps % args.test_interval == 0:
+            if global_steps % args.eval_interval == 0:
                 eval_loss = evaluation(model, args, tokenizer, loss_func)
                 if args.tensorboard is not None and bmt.rank() == 0:
                     writer.add_scalar("Loss/eval", eval_loss, global_steps)
                 if eval_loss < best_eval_loss:
                     best_eval_loss = eval_loss
                     eval_loss_increase = 0
-                    bmt.save(
-                        model, os.path.join(args.save, args.save_name + ("-epoch-%d.pt" % epoch))
-                    )
+                    if args.save is not None:
+                        bmt.save(model, os.path.join(args.save, args.save_name + "-best.pt"))
                 else:
                     eval_loss_increase += 1
                 bmt.print_rank(
                     "| Eval loss: {:.4f} | Increase: {:2d}".format(eval_loss, eval_loss_increase)
                 )
                 if eval_loss_increase == args.early_stop_patience:
-                    raise StopIteration(
+                    bmt.print_rank(
                         "Eval loss has increased {:d} times, the finetune loop early stopped."
                         .format(eval_loss_increase)
                     )
+                    return
     # end of finetune
 
 

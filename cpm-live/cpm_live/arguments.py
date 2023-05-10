@@ -130,7 +130,7 @@ def add_finetune_args(parser: argparse.ArgumentParser):
         default=False,
         help="drop data from each epoch that cannot be formed into a complete batch at the end",
     )
-    group.add_argument("--test-interval", type=int, default=500, help="test interval")
+    group.add_argument("--eval-interval", type=int, default=500, help="eval interval")
     group.add_argument("--early-stop-patience", type=int, default=5, help="early stop steps")
     return parser
 
