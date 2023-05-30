@@ -5,7 +5,7 @@
 **直播训练开源大模型**
 
 <p align="center">
-   <a href="https://live.openbmb.org/playground/" target="_blank">模力表格</a> • <a href="https://live.openbmb.org/" target="_blank">官方网站</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">计划书</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">讨论区</a> • <a href="./README.md" target="_blank">English</a>
+   <a href="https://live.openbmb.org/" target="_blank">官方网站</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">计划书</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">讨论区</a> • <a href="./README.md" target="_blank">English</a>
 <br>
 </p>
 

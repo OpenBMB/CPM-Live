@@ -5,7 +5,7 @@
 **Live Training for Open-source Big Models**
 
 <p align="center">
-   <a href="https://live.openbmb.org/playground/" target="_blank">MFTable</a> • <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
+   <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
 <br>
 <br>
 </p>
