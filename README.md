@@ -22,7 +22,7 @@
 
 ## Milestones
 
-- **CPM-Bee** (2022/10/13- ) [[Plan](./plans/CPM-Bee训练计划书.md)]
+- **CPM-Bee** (2022/10/13-2023/05/27) [[Code](https://github.com/OpenBMB/CPM-Bee)][[Model](https://github.com/OpenBMB/CPM-Bee#%E6%A8%A1%E5%9E%8B)][[Plan](./plans/CPM-Bee训练计划书.md)]
 - **CPM-Ant+** (2022/08/05-2022/10/12) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live#model-checkpoints)]
 - **CPM-Ant** (2022/05/29-2022/08/05) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://live.openbmb.org/ant)][[Blog](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)][[Plan](./plans/CPM-Ant训练计划书.md)]
 

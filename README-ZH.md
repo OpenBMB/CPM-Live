@@ -21,7 +21,7 @@
 
 
 ## 里程碑
-- **CPM-Bee** (2022/10/13- ) [[计划书](./plans/CPM-Bee训练计划书.md)]
+- **CPM-Bee** (2022/10/13-2023/05/27) [[代码](https://github.com/OpenBMB/CPM-Bee)][[模型](https://github.com/OpenBMB/CPM-Bee#%E6%A8%A1%E5%9E%8B)][[计划书](./plans/CPM-Bee训练计划书.md)]
 - **CPM-Ant+** (2022/08/05-2022/10/12) [[代码](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)][[模型](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live#model-checkpoints)]
 - **CPM-Ant** (2022/05/29-2022/08/05) [[代码](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[模型](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[网站](https://live.openbmb.org/ant)][[博客](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)][[计划书](./plans/CPM-Ant训练计划书.md)]
 
