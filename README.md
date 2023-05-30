@@ -13,7 +13,8 @@
 </div>
 
 ## What's New
-- 2023/01/13 **[MFTable](https://live.openbmb.org/playground/), powered by CPM-Bee (under training), is released!** Process texts in a surprisingly simple and efficient way!
+- 2023/05/27 [CPM-Bee](https://github.com/OpenBMB/CPM-Bee) is released!
+- 2023/04/12 CPM-Ant has been integrated into [HuggingFace Transformers](https://huggingface.co/openbmb/cpm-ant-10b)!
 - 2022/10/12 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live), a bilingual model, is released! In addition to generating Chinese/English text, you can now use our model for QA, summarization and translation tasks!
 - 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) is released!
 - 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://live.openbmb.org/home).

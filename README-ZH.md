@@ -12,7 +12,8 @@
 </div>
 
 ## 动态
-- 2023/01/13 **[模力表格](https://live.openbmb.org/playground/)上线！** CPM-Bee赋能表格，帮你提高生产力！
+- 2023/05/27 [CPM-Bee](https://github.com/OpenBMB/CPM-Bee) 发布了！
+- 2023/04/12 CPM-Ant 可以在[HuggingFace Transformers](https://huggingface.co/openbmb/cpm-ant-10b)中使用了！
 - 2022/10/12 中英双语模型 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live) 已经发布！除了能够生成中文/英文文本，现在模型还可以处理问答、摘要和翻译任务！
 - 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) 已经发布！
 - 2022/05/29 CPM-Live的训练今天启动! 详情请查看[训练动态](https://live.openbmb.org/home)。
