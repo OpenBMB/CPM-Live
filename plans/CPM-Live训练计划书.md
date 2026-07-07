@@ -185,7 +185,7 @@ CPM-Live系列发布模型适用协议为“[通用模型许可协议-来源说�
 - **商业化**：使用者可以以任何商业目的使用此通用模型。
 - **无新增限制**：使用者不得另外使用任何法律条款或技术措施，限制他人做本许可协议准许的任何事情。
 
-更多该协议详细内容请参阅[该网址](https://github.com/OpenBMB/General-Model-License/blob/main/%E9%80%9A%E7%94%A8%E6%A8%A1%E5%9E%8B%E8%AE%B8%E5%8F%AF%E5%8D%8F%E8%AE%AE-%E6%9D%A5%E6%BA%90%E8%AF%B4%E6%98%8E-%E5%AE%A3%E4%BC%A0%E9%99%90%E5%88%B6.md)。该协议隶属于**通用模型许可协议族**，关于更多通用模型许可协议的介绍，请参阅[该网址](https://www.openbmb.org/models/license)。
+更多该协议详细内容请参阅[该网址](https://github.com/OpenBMB/General-Model-License/blob/main/%E9%80%9A%E7%94%A8%E6%A8%A1%E5%9E%8B%E8%AE%B8%E5%8F%AF%E5%8D%8F%E8%AE%AE-%E6%9D%A5%E6%BA%90%E8%AF%B4%E6%98%8E-%E5%AE%A3%E4%BC%A0%E9%99%90%E5%88%B6.md)。该协议隶属于**通用模型许可协议族**，关于更多通用模型许可协议的介绍，请参阅[该网址](https://www.openbmb.cn/models/license)。
 
 ## 五、风险提示
 

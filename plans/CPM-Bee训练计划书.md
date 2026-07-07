@@ -2,7 +2,7 @@
 
 ## 一、模型架构
 
-CPM-Bee的结构整体与CPM-Ant保持一致，可参考[模型细节](https://www.openbmb.org/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)。
+CPM-Bee的结构整体与CPM-Ant保持一致，可参考[模型细节](https://www.openbmb.cn/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)。
 
 相较于CPM-Ant，CPM-Bee增加了如下特性：
 

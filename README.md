@@ -5,7 +5,7 @@
 **Live Training for Open-source Big Models**
 
 <p align="center">
-   <a href="https://live.openbmb.org/" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
+   <a href="https://github.com/OpenBMB/CPM-Live" target="_blank">Website</a> • <a href="./plans/CPM-Live训练计划书.md" target="_blank">Plan</a> • <a href="https://github.com/OpenBMB/CPM-Live/discussions">Discussion</a> • <a href="./README-ZH.md" target="_blank">简体中文</a>
 <br>
 <br>
 </p>
@@ -17,14 +17,14 @@
 - 2023/04/12 CPM-Ant has been integrated into [HuggingFace Transformers](https://huggingface.co/openbmb/cpm-ant-10b)!
 - 2022/10/12 [CPM-Ant+](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live), a bilingual model, is released! In addition to generating Chinese/English text, you can now use our model for QA, summarization and translation tasks!
 - 2022/09/16 [CPM-Ant](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live) is released!
-- 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://live.openbmb.org/home).
+- 2022/05/29 The training of CPM-Live has launched today! See [training dynamics](https://github.com/OpenBMB/CPM-Live).
 - 2022/05/25 The [training plan](./plans/CPM-Live训练计划书.md) for CPM-Live is now published. Look forward to the training! 
 
 ## Milestones
 
 - **CPM-Bee** (2022/10/13-2023/05/27) [[Code](https://github.com/OpenBMB/CPM-Bee)][[Model](https://github.com/OpenBMB/CPM-Bee#%E6%A8%A1%E5%9E%8B)][[Plan](./plans/CPM-Bee训练计划书.md)]
 - **CPM-Ant+** (2022/08/05-2022/10/12) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant-plus/cpm-live#model-checkpoints)]
-- **CPM-Ant** (2022/05/29-2022/08/05) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://live.openbmb.org/ant)][[Blog](https://www.openbmb.org/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)][[Plan](./plans/CPM-Ant训练计划书.md)]
+- **CPM-Ant** (2022/05/29-2022/08/05) [[Code](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live)][[Model](https://github.com/OpenBMB/CPM-Live/tree/cpm-ant/cpm-live#model-checkpoints)][[Website](https://github.com/OpenBMB/CPM-Live)][[Blog](https://www.openbmb.cn/en/community/blogs/blogpage?id=98afef2ce45f4fe9a4bc15a66d7ccb92)][[Plan](./plans/CPM-Ant训练计划书.md)]
 
 ## Training Plan
 Considering the scale of data and computing resources, CPM-Live will start with a 10B model training.
